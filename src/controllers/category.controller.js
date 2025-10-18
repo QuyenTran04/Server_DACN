@@ -45,7 +45,53 @@ exports.getCategories = async (req, res) => {
     return res.status(500).json({ message: "Lấy danh mục thất bại" });
     }
 };
+exports.getParentCategories = async (req, res) => {
+  try {
+    const parents = await Category.find({
+      $or: [{ parent: { $exists: false } }, { parent: null }],
+    })
+      .select("_id name iconUrl createdAt")
+      .sort({ createdAt: 1 });
+    res.json(parents);
+  } catch (e) {
+    res.status(500).json({ message: e.message });
+  }
+};
 
+// GET /api/categories/:parentId/children
+exports.getChildrenByParent = async (req, res) => {
+  try {
+    const { parentId } = req.params;
+    const children = await Category.find({ parent: parentId })
+      .select("_id name iconUrl createdAt")
+      .sort({ createdAt: 1 });
+    res.json(children);
+  } catch (e) {
+    res.status(500).json({ message: e.message });
+  }
+};
+
+// GET /api/categories/tree  (cha kèm danh sách con)
+exports.getCategoryTree = async (req, res) => {
+  try {
+    const tree = await Category.aggregate([
+      { $match: { $or: [{ parent: { $exists: false } }, { parent: null }] } },
+      {
+        $lookup: {
+          from: "categories",
+          localField: "_id",
+          foreignField: "parent",
+          as: "children",
+          pipeline: [{ $project: { _id: 1, name: 1, iconUrl: 1 } }],
+        },
+      },
+      { $project: { _id: 1, name: 1, iconUrl: 1, children: 1 } },
+    ]);
+    res.json(tree);
+  } catch (e) {
+    res.status(500).json({ message: e.message });
+  }
+};
 
 
 

@@ -256,3 +256,59 @@ exports.statsByLesson = async (req, res) => {
     res.status(500).json({ message: err.message });
   }
 };
+
+exports.removeAllByLesson = async (req, res) => {
+  try {
+    const { lessonId } = req.params;
+    console.log("removeAllByLesson called for lessonId:", lessonId);
+    const lesson = await Lesson.findById(lessonId).select("course");
+    if (!lesson) {
+      return res.status(404).json({ message: "Không tìm thấy bài học" });
+    }
+
+    const course = await Course.findById(lesson.course).select("instructor");
+    if (!course) {
+      return res
+        .status(404)
+        .json({ message: "Không tìm thấy khóa học của bài học này" });
+    }
+
+ 
+    const isOwner =
+      String(course.instructor) === String(req.user?.id || req.user?._id);
+    const isAdmin = req.user?.role === "admin";
+    if (!isOwner && !isAdmin) {
+      return res
+        .status(403)
+        .json({ message: "Bạn không có quyền xóa quiz của bài học này" });
+    }
+
+
+    const quizIds = await Quiz.find({ lesson: lessonId }).distinct("_id");
+
+    if (!quizIds.length) {
+      return res.json({
+        message: "Không có câu hỏi nào để xóa",
+        deletedQuizzes: 0,
+        deletedSubmissions: 0,
+      });
+    }
+
+    const [quizDel, subDel] = await Promise.all([
+      Quiz.deleteMany({ _id: { $in: quizIds } }),
+      Submission.deleteMany({ quiz: { $in: quizIds } }),
+    ]);
+
+    return res.json({
+      message: "Đã xóa tất cả câu hỏi của bài học",
+      deletedQuizzes: quizDel.deletedCount || 0,
+      deletedSubmissions: subDel.deletedCount || 0,
+      lessonId,
+    });
+  } catch (err) {
+    console.error("removeAllByLesson error:", err);
+    return res
+      .status(500)
+      .json({ message: "Lỗi server khi xóa quiz theo lesson" });
+  }
+};

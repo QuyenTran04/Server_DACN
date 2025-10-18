@@ -43,7 +43,7 @@ Mỗi phần tử dạng:
 Yêu cầu:
 - Ưu tiên 1 đáp án đúng (nhưng có thể đa chọn nếu văn bản yêu cầu).
 - Không sinh đáp án mơ hồ kiểu "Tất cả đều đúng" trừ khi cần.
-- Tối đa ${maxQuestions} câu, tiếng Việt, rõ ràng.
+- Tối đa ${maxQuestions} câu, rõ ràng.
 
 Văn bản nguồn:
 """${String(text || "").slice(0, 15000)}"""`;

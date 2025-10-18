@@ -40,5 +40,5 @@ router.post(
 
 // Thống kê nhanh
 router.get("/stats/lesson/:lessonId", requireAuth, quizCtrl.statsByLesson);
-
+router.delete("/:lessonId/quizzes", requireAuth, quizCtrl.removeAllByLesson);
 module.exports = router;
