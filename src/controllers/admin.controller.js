@@ -1,351 +1,463 @@
 // src/controllers/admin.controller.js
-const User = require("../models/User");
+// Tận dụng lại controller sẵn có: course/lesson/quiz/category
+const courseCtrl = require("./course.controller");
+const lessonCtrl = require("./lesson.controller");
+const quizCtrl = require("./quiz.controller");
+const categoryCtrl = require("./category.controller");
+
 const Course = require("../models/Course");
 const Lesson = require("../models/Lesson");
 const Quiz = require("../models/Quiz");
+const User = require("../models/User");
 const Enrollment = require("../models/Enrollment");
 const Order = require("../models/Order");
 const Review = require("../models/Review");
-const Submission = require("../models/Submission");
-const { buildQueryOpts, like } = require("../utils/query");
 
-// --- OVERVIEW KPI ---
-exports.getOverview = async (req, res) => {
+// Helper chung cho list
+const buildListQuery = (req) => {
+  const page = Math.max(1, parseInt(req.query.page) || 1);
+  const limit = Math.min(100, parseInt(req.query.limit) || 20);
+  const skip = (page - 1) * limit;
+  const sort = req.query.sort || "-createdAt";
+  const q = (req.query.q || "").trim();
+  return { page, limit, skip, sort, q };
+};
+
+/* =========================
+   1) QUẢN LÝ KHÓA HỌC
+========================= */
+// Dùng lại hàm có sẵn
+exports.listCourses = courseCtrl.getCourses;
+exports.createCourse = courseCtrl.createCourse;
+exports.updateCourse = courseCtrl.updateCourse;
+
+// Xóa course: dọn lesson + quiz liên quan (không trùng với controller khác)
+exports.deleteCourse = async (req, res) => {
   try {
-    const [totalUsers, instructors, totalCourses, totalEnrollments] =
-      await Promise.all([
-        User.countDocuments({}),
-        User.countDocuments({ role: "instructor" }),
-        Course.countDocuments({}),
-        Enrollment.countDocuments({}),
-      ]);
+    const { id } = req.params;
+    await Lesson.deleteMany({ course: id });
+    await Quiz.deleteMany({ course: id });
+    const deleted = await Course.findByIdAndDelete(id);
+    if (!deleted)
+      return res.status(404).json({ message: "Không tìm thấy khóa học" });
+    res.json({ message: "Đã xóa khóa học" });
+  } catch (err) {
+    console.error("deleteCourse:", err);
+    res.status(500).json({ message: "Lỗi server" });
+  }
+};
 
-    const paidAgg = await Order.aggregate([
+// Gán giảng viên
+exports.assignInstructor = async (req, res) => {
+  try {
+    const { instructorId } = req.body;
+    const inst = await User.findOne({ _id: instructorId, role: "instructor" });
+    if (!inst)
+      return res.status(400).json({ message: "Giảng viên không hợp lệ" });
+    const updated = await Course.findByIdAndUpdate(
+      req.params.id,
+      { instructor: instructorId },
+      { new: true }
+    )
+      .populate("category", "name")
+      .populate("instructor", "name email");
+    if (!updated)
+      return res.status(404).json({ message: "Không tìm thấy khóa học" });
+    res.json(updated);
+  } catch (err) {
+    console.error("assignInstructor:", err);
+    res.status(500).json({ message: "Lỗi server" });
+  }
+};
+
+// Publish / Unpublish
+exports.publishCourse = async (req, res) => {
+  try {
+    const doc = await Course.findByIdAndUpdate(
+      req.params.id,
+      { published: true },
+      { new: true }
+    );
+    if (!doc)
+      return res.status(404).json({ message: "Không tìm thấy khóa học" });
+    res.json(doc);
+  } catch (err) {
+    res.status(500).json({ message: "Lỗi server" });
+  }
+};
+exports.unpublishCourse = async (req, res) => {
+  try {
+    const doc = await Course.findByIdAndUpdate(
+      req.params.id,
+      { published: false },
+      { new: true }
+    );
+    if (!doc)
+      return res.status(404).json({ message: "Không tìm thấy khóa học" });
+    res.json(doc);
+  } catch (err) {
+    res.status(500).json({ message: "Lỗi server" });
+  }
+};
+
+// Danh mục: dùng lại controller sẵn có
+exports.listCategories = categoryCtrl.getCategories;
+exports.createCategory = categoryCtrl.createCategory;
+
+/* =========================
+   2) QUẢN LÝ GIẢNG VIÊN
+========================= */
+exports.listInstructors = async (req, res) => {
+  try {
+    const { skip, limit, sort, q } = buildListQuery(req);
+    const filter = { role: "instructor" };
+    if (q)
+      filter.$or = [
+        { name: { $regex: q, $options: "i" } },
+        { email: { $regex: q, $options: "i" } },
+      ];
+    const [items, total] = await Promise.all([
+      User.find(filter).sort(sort).skip(skip).limit(limit),
+      User.countDocuments(filter),
+    ]);
+    res.json({ total, items, pageSize: limit });
+  } catch (err) {
+    res.status(500).json({ message: "Lỗi server" });
+  }
+};
+
+exports.createInstructor = async (req, res) => {
+  try {
+    const user = await User.create({ ...req.body, role: "instructor" });
+    res.status(201).json(user);
+  } catch (err) {
+    res.status(500).json({ message: "Tạo giảng viên thất bại" });
+  }
+};
+
+exports.updateInstructor = async (req, res) => {
+  try {
+    const user = await User.findOneAndUpdate(
+      { _id: req.params.id, role: "instructor" },
+      req.body,
+      { new: true }
+    );
+    if (!user)
+      return res.status(404).json({ message: "Không tìm thấy giảng viên" });
+    res.json(user);
+  } catch (err) {
+    res.status(500).json({ message: "Lỗi server" });
+  }
+};
+
+exports.deleteInstructor = async (req, res) => {
+  try {
+    await User.deleteOne({ _id: req.params.id, role: "instructor" });
+    res.json({ message: "Đã xóa giảng viên" });
+  } catch (err) {
+    res.status(500).json({ message: "Lỗi server" });
+  }
+};
+
+/* =========================
+   3) QUẢN LÝ HỌC VIÊN
+========================= */
+exports.listStudents = async (req, res) => {
+  try {
+    const { skip, limit, sort, q } = buildListQuery(req);
+    const filter = { role: "student" };
+    if (q)
+      filter.$or = [
+        { name: { $regex: q, $options: "i" } },
+        { email: { $regex: q, $options: "i" } },
+      ];
+    const [items, total] = await Promise.all([
+      User.find(filter).sort(sort).skip(skip).limit(limit),
+      User.countDocuments(filter),
+    ]);
+    res.json({ total, items, pageSize: limit });
+  } catch (err) {
+    res.status(500).json({ message: "Lỗi server" });
+  }
+};
+
+exports.getStudentProgress = async (req, res) => {
+  try {
+    const enrollments = await Enrollment.find({ student: req.params.id })
+      .populate("course", "title")
+      .populate("completedLessons", "title");
+    res.json({ items: enrollments });
+  } catch (err) {
+    res.status(500).json({ message: "Lỗi server" });
+  }
+};
+
+/* =========================
+   4) THANH TOÁN & DOANH THU
+========================= */
+exports.listOrders = async (req, res) => {
+  try {
+    const { skip, limit, sort, q } = buildListQuery(req);
+    const filter = {};
+    if (q) filter.status = q; // vd: paid|pending|failed
+    const [items, total] = await Promise.all([
+      Order.find(filter)
+        .populate("student", "name email")
+        .populate("course", "title")
+        .sort(sort)
+        .skip(skip)
+        .limit(limit),
+      Order.countDocuments(filter),
+    ]);
+    res.json({ total, items, pageSize: limit });
+  } catch (err) {
+    res.status(500).json({ message: "Lỗi server" });
+  }
+};
+
+exports.refundOrder = async (req, res) => {
+  try {
+    const updated = await Order.findByIdAndUpdate(
+      req.params.id,
+      { status: "failed", "metadata.refundAt": new Date() },
+      { new: true }
+    );
+    if (!updated)
+      return res.status(404).json({ message: "Không tìm thấy đơn hàng" });
+    res.json(updated);
+  } catch (err) {
+    res.status(500).json({ message: "Lỗi server" });
+  }
+};
+
+exports.revenueByMonth = async (req, res) => {
+  try {
+    const year = parseInt(req.query.year) || new Date().getFullYear();
+    const data = await Order.aggregate([
+      { $match: { status: "paid" } },
+      {
+        $match: {
+          createdAt: {
+            $gte: new Date(`${year}-01-01`),
+            $lt: new Date(`${year + 1}-01-01`),
+          },
+        },
+      },
+      {
+        $group: {
+          _id: { $month: "$createdAt" },
+          revenue: { $sum: "$amount" },
+          orders: { $sum: 1 },
+        },
+      },
+      { $project: { month: "$_id", revenue: 1, orders: 1, _id: 0 } },
+      { $sort: { month: 1 } },
+    ]);
+    res.json({ year, data });
+  } catch (err) {
+    res.status(500).json({ message: "Lỗi server" });
+  }
+};
+
+exports.revenueByCourse = async (_req, res) => {
+  try {
+    const data = await Order.aggregate([
       { $match: { status: "paid" } },
       {
         $group: {
-          _id: null,
+          _id: "$course",
           revenue: { $sum: "$amount" },
-          ordersCount: { $sum: 1 },
+          orders: { $sum: 1 },
         },
       },
+      { $sort: { revenue: -1 } },
+      { $limit: 50 },
     ]);
+    const map = Object.fromEntries(
+      (
+        await Course.find({ _id: { $in: data.map((d) => d._id) } }, "title")
+      ).map((c) => [c._id.toString(), c.title])
+    );
+    res.json(
+      data.map((d) => ({
+        courseId: d._id,
+        title: map[d._id.toString()],
+        revenue: d.revenue,
+        orders: d.orders,
+      }))
+    );
+  } catch (err) {
+    res.status(500).json({ message: "Lỗi server" });
+  }
+};
 
-    const revenue = paidAgg[0]?.revenue || 0;
-    const ordersCount = paidAgg[0]?.ordersCount || 0;
-
-    // doanh thu 30 ngày
-    const revenue30d = await Order.aggregate([
-      {
-        $match: {
-          status: "paid",
-          createdAt: { $gte: new Date(Date.now() - 30 * 864e5) },
-        },
-      },
-      {
-        $group: {
-          _id: { $dateToString: { format: "%Y-%m-%d", date: "$createdAt" } },
-          amount: { $sum: "$amount" },
-        },
-      },
-      { $sort: { _id: 1 } },
-    ]);
-
-    // top khóa học theo ghi danh
-    const topCourses = await Enrollment.aggregate([
-      { $group: { _id: "$course", students: { $sum: 1 } } },
-      { $sort: { students: -1 } },
-      { $limit: 5 },
+exports.revenueByInstructor = async (_req, res) => {
+  try {
+    const data = await Order.aggregate([
+      { $match: { status: "paid" } },
       {
         $lookup: {
           from: "courses",
-          localField: "_id",
+          localField: "course",
           foreignField: "_id",
-          as: "course",
+          as: "c",
         },
       },
-      { $unwind: "$course" },
+      { $unwind: "$c" },
       {
-        $project: {
-          courseId: "$course._id",
-          title: "$course.title",
-          students: 1,
-          _id: 0,
+        $group: {
+          _id: "$c.instructor",
+          revenue: { $sum: "$amount" },
+          orders: { $sum: 1 },
         },
       },
+      { $sort: { revenue: -1 } },
     ]);
+    const map = Object.fromEntries(
+      (
+        await User.find({ _id: { $in: data.map((d) => d._id) } }, "name email")
+      ).map((u) => [u._id.toString(), { name: u.name, email: u.email }])
+    );
+    res.json(
+      data.map((d) => ({
+        instructorId: d._id,
+        ...map[d._id.toString()],
+        revenue: d.revenue,
+        orders: d.orders,
+      }))
+    );
+  } catch (err) {
+    res.status(500).json({ message: "Lỗi server" });
+  }
+};
 
-    // tiến độ TB
-    const completion = await Enrollment.aggregate([
-      { $group: { _id: null, avgProgress: { $avg: "$progress" } } },
+/* =========================
+   5) THỐNG KÊ & BÁO CÁO (DASHBOARD)
+========================= */
+exports.overview = async (_req, res) => {
+  try {
+    const [
+      totalCourses,
+      publishedCourses,
+      totalUsers,
+      instructors,
+      students,
+      activeEnrolls,
+      monthRevenue,
+    ] = await Promise.all([
+      Course.countDocuments({}),
+      Course.countDocuments({ published: true }),
+      User.countDocuments({}),
+      User.countDocuments({ role: "instructor" }),
+      User.countDocuments({ role: "student" }),
+      Enrollment.countDocuments({ status: "active" }),
+      Order.aggregate([
+        { $match: { status: "paid" } },
+        {
+          $match: {
+            createdAt: {
+              $gte: new Date(
+                new Date().getFullYear(),
+                new Date().getMonth(),
+                1
+              ),
+            },
+          },
+        },
+        {
+          $group: {
+            _id: null,
+            revenue: { $sum: "$amount" },
+            orders: { $sum: 1 },
+          },
+        },
+      ]),
     ]);
 
     res.json({
-      cards: {
-        totalUsers,
-        instructors,
-        totalCourses,
-        totalEnrollments,
-        revenue,
-        ordersCount,
-        avgProgress: Math.round(completion[0]?.avgProgress || 0),
-      },
-      charts: { revenue30d },
-      tables: { topCourses },
+      courses: { total: totalCourses, published: publishedCourses },
+      users: { total: totalUsers, instructors, students },
+      enrollments: { active: activeEnrolls },
+      revenueThisMonth: monthRevenue[0] || { revenue: 0, orders: 0 },
     });
-  } catch (e) {
-    res.status(500).json({ message: "Lỗi lấy overview", error: e.message });
+  } catch (err) {
+    res.status(500).json({ message: "Lỗi server" });
   }
 };
 
-// --- USERS ---
-exports.listUsers = async (req, res) => {
+/* =========================
+   6) QUẢN LÝ HỆ THỐNG (ROLE)
+========================= */
+exports.updateUserRole = async (req, res) => {
   try {
-    const { q, role, isActive } = req.query;
-    const { limit, skip, sort, page } = buildQueryOpts(req, {
-      limit: 20,
-      sortBy: "createdAt",
-      order: "desc",
-    });
-
-    const where = {
-      ...(q ? { $or: [{ name: like(q) }, { email: like(q) }] } : {}),
-      ...(role ? { role } : {}),
-      ...(isActive !== undefined ? { isActive: isActive === "true" } : {}),
-    };
-
-    const [items, total] = await Promise.all([
-      User.find(where).sort(sort).skip(skip).limit(limit).select("-password"),
-      User.countDocuments(where),
-    ]);
-
-    res.json({ items, total, page, pages: Math.ceil(total / limit) });
-  } catch (e) {
-    res.status(500).json({ message: "Lỗi list users", error: e.message });
-  }
-};
-
-exports.updateUser = async (req, res) => {
-  try {
-    const { id } = req.params;
-    const { role, isActive } = req.body;
-    const allowed = {};
-    if (role) allowed.role = role;
-    if (typeof isActive === "boolean") allowed.isActive = isActive;
-    const user = await User.findByIdAndUpdate(id, allowed, {
-      new: true,
-    }).select("-password");
+    const { role } = req.body; // "student" | "instructor" | "admin"
+    const user = await User.findByIdAndUpdate(
+      req.params.id,
+      { role },
+      { new: true }
+    );
+    if (!user)
+      return res.status(404).json({ message: "Không tìm thấy người dùng" });
     res.json(user);
-  } catch (e) {
-    res
-      .status(400)
-      .json({ message: "Cập nhật user thất bại", error: e.message });
+  } catch (err) {
+    res.status(500).json({ message: "Lỗi server" });
   }
 };
 
-// --- COURSES ---
-exports.listCoursesAdmin = async (req, res) => {
-  try {
-    const { q, category, published } = req.query;
-    const { limit, skip, sort, page } = buildQueryOpts(req, {
-      limit: 20,
-      sortBy: "createdAt",
-    });
-
-    const where = {
-      ...(q ? { title: like(q) } : {}),
-      ...(category ? { category } : {}),
-      ...(published !== undefined ? { published: published === "true" } : {}),
-    };
-
-    const [items, total] = await Promise.all([
-      Course.find(where)
-        .populate("instructor", "name email")
-        .sort(sort)
-        .skip(skip)
-        .limit(limit),
-      Course.countDocuments(where),
-    ]);
-    res.json({ items, total, page, pages: Math.ceil(total / limit) });
-  } catch (e) {
-    res.status(500).json({ message: "Lỗi list courses", error: e.message });
-  }
-};
-
-exports.togglePublishCourse = async (req, res) => {
-  try {
-    const { id } = req.params;
-    const course = await Course.findById(id);
-    if (!course)
-      return res.status(404).json({ message: "Không tìm thấy khóa học" });
-    course.published = !course.published;
-    await course.save();
-    res.json({ _id: course._id, published: course.published });
-  } catch (e) {
-    res
-      .status(400)
-      .json({ message: "Không thể cập nhật publish", error: e.message });
-  }
-};
-
-// --- ORDERS ---
-exports.listOrders = async (req, res) => {
-  try {
-    const { status, from, to, user } = req.query;
-    const { limit, skip, sort, page } = buildQueryOpts(req, {
-      limit: 20,
-      sortBy: "createdAt",
-      order: "desc",
-    });
-
-    const where = {
-      ...(status ? { status } : {}),
-      ...(user ? { user } : {}),
-      ...(from || to
-        ? {
-            createdAt: {
-              ...(from ? { $gte: new Date(from) } : {}),
-              ...(to ? { $lte: new Date(to) } : {}),
-            },
-          }
-        : {}),
-    };
-
-    const [items, total] = await Promise.all([
-      Order.find(where)
-        .populate("user", "name email")
-        .populate("course", "title")
-        .sort(sort)
-        .skip(skip)
-        .limit(limit),
-      Order.countDocuments(where),
-    ]);
-    res.json({ items, total, page, pages: Math.ceil(total / limit) });
-  } catch (e) {
-    res.status(500).json({ message: "Lỗi list orders", error: e.message });
-  }
-};
-
-// --- ENROLLMENTS ---
-exports.listEnrollments = async (req, res) => {
-  try {
-    const { course, user, status } = req.query;
-    const { limit, skip, sort, page } = buildQueryOpts(req);
-
-    const where = {
-      ...(course ? { course } : {}),
-      ...(user ? { user } : {}),
-      ...(status ? { status } : {}),
-    };
-
-    const [items, total] = await Promise.all([
-      Enrollment.find(where)
-        .populate("user", "name email")
-        .populate("course", "title")
-        .sort(sort)
-        .skip(skip)
-        .limit(limit),
-      Enrollment.countDocuments(where),
-    ]);
-    res.json({ items, total, page, pages: Math.ceil(total / limit) });
-  } catch (e) {
-    res.status(500).json({ message: "Lỗi list enrollments", error: e.message });
-  }
-};
-
-// --- REVIEWS moderation ---
+/* =========================
+   7) QUẢN LÝ TƯƠNG TÁC (REVIEW)
+========================= */
 exports.listReviews = async (req, res) => {
   try {
-    const { course } = req.query;
-    const { limit, skip, sort, page } = buildQueryOpts(req);
-    const where = { ...(course ? { course } : {}) };
+    const { skip, limit, sort, q } = buildListQuery(req);
+    const filter = {};
+    if (q) filter.comment = { $regex: q, $options: "i" };
     const [items, total] = await Promise.all([
-      Review.find(where)
-        .populate("user", "name")
+      Review.find(filter)
+        .populate("student", "name")
         .populate("course", "title")
         .sort(sort)
         .skip(skip)
         .limit(limit),
-      Review.countDocuments(where),
+      Review.countDocuments(filter),
     ]);
-    res.json({ items, total, page, pages: Math.ceil(total / limit) });
-  } catch (e) {
-    res.status(500).json({ message: "Lỗi list reviews", error: e.message });
+    res.json({ total, items, pageSize: limit });
+  } catch (err) {
+    res.status(500).json({ message: "Lỗi server" });
   }
 };
 
 exports.deleteReview = async (req, res) => {
   try {
     await Review.findByIdAndDelete(req.params.id);
-    res.json({ ok: true });
-  } catch (e) {
-    res.status(400).json({ message: "Xóa review thất bại", error: e.message });
+    res.json({ message: "Đã xóa đánh giá" });
+  } catch (err) {
+    res.status(500).json({ message: "Lỗi server" });
   }
 };
 
-// --- COURSE ANALYTICS ---
-exports.courseAnalytics = async (req, res) => {
+exports.hideReview = async (req, res) => {
   try {
-    const { id } = req.params;
-
-    const [enrolls, revenueByDay, reviewStats, quizStats] = await Promise.all([
-      Enrollment.aggregate([
-        {
-          $match: {
-            course: require("mongoose").Types.ObjectId.createFromHexString(id),
-          },
-        },
-        {
-          $group: {
-            _id: "$status",
-            count: { $sum: 1 },
-            avgProgress: { $avg: "$progress" },
-          },
-        },
-      ]),
-      Order.aggregate([
-        {
-          $match: {
-            course: require("mongoose").Types.ObjectId.createFromHexString(id),
-            status: "paid",
-          },
-        },
-        {
-          $group: {
-            _id: { $dateToString: { format: "%Y-%m-%d", date: "$createdAt" } },
-            amount: { $sum: "$amount" },
-          },
-        },
-        { $sort: { _id: 1 } },
-      ]),
-      Review.aggregate([
-        {
-          $match: {
-            course: require("mongoose").Types.ObjectId.createFromHexString(id),
-          },
-        },
-        { $group: { _id: "$rating", count: { $sum: 1 } } },
-        { $sort: { _id: 1 } },
-      ]),
-      Submission.aggregate([
-        {
-          $match: {
-            course: require("mongoose").Types.ObjectId.createFromHexString(id),
-          },
-        },
-        {
-          $group: {
-            _id: "$quiz",
-            attempts: { $sum: 1 },
-            correct: { $sum: { $cond: ["$isCorrect", 1, 0] } },
-          },
-        },
-        { $sort: { attempts: -1 } },
-      ]),
-    ]);
-
-    res.json({ enrolls, revenueByDay, reviewStats, quizStats });
-  } catch (e) {
-    res.status(500).json({ message: "Lỗi analytics", error: e.message });
+    const review = await Review.findByIdAndUpdate(
+      req.params.id,
+      { comment: "[hidden by admin]" },
+      { new: true }
+    );
+    if (!review)
+      return res.status(404).json({ message: "Không tìm thấy đánh giá" });
+    res.json(review);
+  } catch (err) {
+    res.status(500).json({ message: "Lỗi server" });
   }
 };
+
+exports.listLessons = lessonCtrl.listLessonsByCourse;
+exports.createLesson = lessonCtrl.createLesson;
+exports.updateLesson = lessonCtrl.updateLesson;
+exports.deleteLesson = lessonCtrl.deleteLesson;
+exports.reorderLessons = lessonCtrl.reorderLessons;
+
+exports.listQuiz = quizCtrl.list;
+exports.createQuiz = quizCtrl.create;
+exports.updateQuiz = quizCtrl.update;
+exports.deleteQuiz = quizCtrl.remove;
