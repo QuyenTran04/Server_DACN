@@ -1,9 +1,10 @@
 const axios = require("axios");
 
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
-const RAW_MODEL = process.env.GEMINI_EMBED_MODEL || "embedding-001";
+const RAW_MODEL = process.env.GEMINI_EMBED_MODEL || "gemini-embedding-001"; // nên dùng model này
+const OUTPUT_DIM = parseInt(process.env.GEMINI_EMBED_DIM || "768", 10); // đặt 768/1536/3072
 
-// Chuẩn hoá để luôn có tiền tố "models/"
+// Luôn có tiền tố "models/"
 const MODEL_ID = RAW_MODEL.startsWith("models/")
   ? RAW_MODEL
   : `models/${RAW_MODEL}`;
@@ -14,31 +15,35 @@ function isNonEmptyString(s) {
   return typeof s === "string" && s.trim().length > 0;
 }
 
+// Chuẩn hoá L2 cho vector (khuyến nghị khi dùng 768/1536)
+function l2Normalize(vec) {
+  const norm = Math.sqrt(vec.reduce((acc, v) => acc + v * v, 0)) || 1;
+  return vec.map((v) => v / norm);
+}
+
 exports.embedBatch = async (texts) => {
-  if (!Array.isArray(texts) || texts.length === 0) {
+  if (!Array.isArray(texts) || texts.length === 0)
     throw new Error("No text provided for embedding");
-  }
   if (!GEMINI_API_KEY) throw new Error("Missing GEMINI_API_KEY");
 
-  // 1) Làm sạch/giới hạn
   const cleaned = texts
     .map((t) => (typeof t === "string" ? t.replace(/\u0000/g, "") : ""))
     .map((t) => t.trim())
     .filter(isNonEmptyString);
-
   if (cleaned.length === 0)
     throw new Error("All texts are empty after cleaning");
 
-  const MAX_LEN = 4000; // tránh INVALID_ARGUMENT do quá dài
+  const MAX_LEN = 4000;
   const capped = cleaned.map((t) =>
     t.length > MAX_LEN ? t.slice(0, MAX_LEN) : t
   );
 
-  // 2) payload ĐÚNG CHUẨN: mỗi request có "model" + "content.parts[].text"
+  // Mỗi request có "model", "content", và "output_dimensionality"
   const makePayload = (arr) => ({
     requests: arr.map((t) => ({
-      model: MODEL_ID, // <<< QUAN TRỌNG
+      model: MODEL_ID,
       content: { parts: [{ text: t }] },
+      output_dimensionality: OUTPUT_DIM, // <<< quan trọng để rút về 768
     })),
   });
 
@@ -56,10 +61,12 @@ exports.embedBatch = async (texts) => {
         `Embedding response size mismatch: got ${vectors.length}, expected ${arr.length}`
       );
     }
-    return vectors;
+    // Chuẩn hoá khi không phải 3072
+    const normalized = OUTPUT_DIM !== 3072 ? vectors.map(l2Normalize) : vectors;
+
+    return normalized;
   }
 
-  // 3) Gọi, nếu 400/413 do batch to → tách đôi
   async function requestWithSplit(arr) {
     try {
       return await callBatch(arr);
@@ -82,9 +89,9 @@ exports.embedBatch = async (texts) => {
   const vectors = await requestWithSplit(capped);
   return {
     vectors,
-    model: RAW_MODEL, // ví dụ "embedding-001"
+    model: RAW_MODEL,
     provider: "gemini",
-    dims: vectors[0]?.length || 0,
+    dims: vectors[0]?.length || OUTPUT_DIM, // lấy đúng chiều thực tế trả về
   };
 };
 

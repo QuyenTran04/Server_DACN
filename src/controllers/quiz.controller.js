@@ -312,3 +312,51 @@ exports.removeAllByLesson = async (req, res) => {
       .json({ message: "Lỗi server khi xóa quiz theo lesson" });
   }
 };
+
+// Lấy quiz theo lesson để LÀM BÀI: ẩn correctAnswers, random & giới hạn số lượng
+exports.forLessonToTake = async (req, res) => {
+  try {
+    const { lessonId } = req.params;
+    const { shuffle = "1" } = req.query;
+
+    // Lấy toàn bộ quiz thuộc lesson
+    const quizzes = await Quiz.find({ lesson: lessonId })
+      .select("_id question options imageUrl") // Ẩn correctAnswers
+      .sort({ createdAt: 1 })
+      .lean();
+
+    if (!quizzes.length) {
+      return res.json({ lessonId, count: 0, items: [] });
+    }
+
+    // Xáo trộn toàn bộ danh sách (nếu cần)
+    let items = [...quizzes];
+    if (shuffle === "1") {
+      for (let i = items.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [items[i], items[j]] = [items[j], items[i]];
+      }
+    }
+
+    // Xáo trộn thứ tự các lựa chọn trong từng câu
+    items = items.map((q) => {
+      const ops = [...(q.options || [])];
+      if (shuffle === "1") {
+        for (let i = ops.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          [ops[i], ops[j]] = [ops[j], ops[i]];
+        }
+      }
+      return {
+        id: q._id,
+        question: q.question,
+        options: ops,
+        imageUrl: q.imageUrl || null,
+      };
+    });
+
+    res.json({ lessonId, count: items.length, items });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+};
