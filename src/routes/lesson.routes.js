@@ -12,8 +12,14 @@ router.post(
 );
 
 router.get(
-  "listLessonsByCourse/:courseId",
+  "/listLessonsByCourse/:courseId",
   middlewares.requireAuth,
   lessonController.listLessonsByCourse
 );
+router.get(
+  "/getLessonById/:id",
+  middlewares.requireAuth,
+  lessonController.getLessonById
+);
+
 module.exports = router;

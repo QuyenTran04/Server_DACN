@@ -312,3 +312,80 @@ exports.removeAllByLesson = async (req, res) => {
       .json({ message: "Lỗi server khi xóa quiz theo lesson" });
   }
 };
+
+// Lấy quiz theo lesson để LÀM BÀI: ẩn correctAnswers, random & giới hạn số lượng
+exports.forLessonToTake = async (req, res) => {
+  try {
+    const { lessonId } = req.params;
+    const { shuffle = "1" } = req.query;
+
+    const quizzes = await Quiz.find({ lesson: lessonId })
+      .select("_id question options correctAnswers imageUrl")
+      .sort({ createdAt: 1 })
+      .lean();
+
+    if (!quizzes.length) return res.json({ lessonId, count: 0, items: [] });
+
+    const shuffleArr = (arr) => {
+      for (let i = arr.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [arr[i], arr[j]] = [arr[j], arr[i]];
+      }
+      return arr;
+    };
+
+    // Helper: ép mọi kiểu option về string
+    const toPlainText = (v) => {
+      if (typeof v === "string") return v;
+      if (v && typeof v === "object") {
+        // xử lý các dạng phổ biến: {text:"..."}, {label:"..."}, {value:"..."} hoặc {text:{text:"..."}}
+        if (typeof v.text === "string") return v.text;
+        if (
+          v.text &&
+          typeof v.text === "object" &&
+          typeof v.text.text === "string"
+        )
+          return v.text.text;
+        if (typeof v.label === "string") return v.label;
+        if (typeof v.value === "string") return v.value;
+      }
+      return String(v ?? "");
+    };
+
+    const norm = (s) => String(s).trim();
+
+    const items = quizzes.map((q) => {
+      const flatOptions = (q.options || []).map(toPlainText);
+      const options = flatOptions.map((text, idx) => ({
+        id: `${q._id}-${idx}`,
+        text, // ← luôn là string
+      }));
+
+      const correctSet = new Set(
+        (q.correctAnswers || []).map((x) => norm(toPlainText(x)))
+      );
+      const correctOptionIds = options
+        .filter((op) => correctSet.has(norm(op.text)))
+        .map((op) => op.id);
+
+      const finalOptions = shuffle === "1" ? shuffleArr([...options]) : options;
+
+      return {
+        id: q._id,
+        question: q.question,
+        options: finalOptions,
+        imageUrl: q.imageUrl || null,
+        // luôn trả đáp án để FE so sánh
+        correctOptionIds,
+        correctAnswersText: [...correctSet], // tiện debug/log
+      };
+    });
+
+    const finalItems = shuffle === "1" ? shuffleArr(items) : items;
+
+    res.json({ lessonId, count: finalItems.length, items: finalItems });
+  } catch (err) {
+    console.error("forLessonToTake error:", err);
+    res.status(500).json({ message: err.message });
+  }
+};
