@@ -319,44 +319,73 @@ exports.forLessonToTake = async (req, res) => {
     const { lessonId } = req.params;
     const { shuffle = "1" } = req.query;
 
-    // Lấy toàn bộ quiz thuộc lesson
     const quizzes = await Quiz.find({ lesson: lessonId })
-      .select("_id question options imageUrl") // Ẩn correctAnswers
+      .select("_id question options correctAnswers imageUrl")
       .sort({ createdAt: 1 })
       .lean();
 
-    if (!quizzes.length) {
-      return res.json({ lessonId, count: 0, items: [] });
-    }
+    if (!quizzes.length) return res.json({ lessonId, count: 0, items: [] });
 
-    // Xáo trộn toàn bộ danh sách (nếu cần)
-    let items = [...quizzes];
-    if (shuffle === "1") {
-      for (let i = items.length - 1; i > 0; i--) {
+    const shuffleArr = (arr) => {
+      for (let i = arr.length - 1; i > 0; i--) {
         const j = Math.floor(Math.random() * (i + 1));
-        [items[i], items[j]] = [items[j], items[i]];
+        [arr[i], arr[j]] = [arr[j], arr[i]];
       }
-    }
+      return arr;
+    };
 
-    // Xáo trộn thứ tự các lựa chọn trong từng câu
-    items = items.map((q) => {
-      const ops = [...(q.options || [])];
-      if (shuffle === "1") {
-        for (let i = ops.length - 1; i > 0; i--) {
-          const j = Math.floor(Math.random() * (i + 1));
-          [ops[i], ops[j]] = [ops[j], ops[i]];
-        }
+    // Helper: ép mọi kiểu option về string
+    const toPlainText = (v) => {
+      if (typeof v === "string") return v;
+      if (v && typeof v === "object") {
+        // xử lý các dạng phổ biến: {text:"..."}, {label:"..."}, {value:"..."} hoặc {text:{text:"..."}}
+        if (typeof v.text === "string") return v.text;
+        if (
+          v.text &&
+          typeof v.text === "object" &&
+          typeof v.text.text === "string"
+        )
+          return v.text.text;
+        if (typeof v.label === "string") return v.label;
+        if (typeof v.value === "string") return v.value;
       }
+      return String(v ?? "");
+    };
+
+    const norm = (s) => String(s).trim();
+
+    const items = quizzes.map((q) => {
+      const flatOptions = (q.options || []).map(toPlainText);
+      const options = flatOptions.map((text, idx) => ({
+        id: `${q._id}-${idx}`,
+        text, // ← luôn là string
+      }));
+
+      const correctSet = new Set(
+        (q.correctAnswers || []).map((x) => norm(toPlainText(x)))
+      );
+      const correctOptionIds = options
+        .filter((op) => correctSet.has(norm(op.text)))
+        .map((op) => op.id);
+
+      const finalOptions = shuffle === "1" ? shuffleArr([...options]) : options;
+
       return {
         id: q._id,
         question: q.question,
-        options: ops,
+        options: finalOptions,
         imageUrl: q.imageUrl || null,
+        // luôn trả đáp án để FE so sánh
+        correctOptionIds,
+        correctAnswersText: [...correctSet], // tiện debug/log
       };
     });
 
-    res.json({ lessonId, count: items.length, items });
+    const finalItems = shuffle === "1" ? shuffleArr(items) : items;
+
+    res.json({ lessonId, count: finalItems.length, items: finalItems });
   } catch (err) {
+    console.error("forLessonToTake error:", err);
     res.status(500).json({ message: err.message });
   }
 };

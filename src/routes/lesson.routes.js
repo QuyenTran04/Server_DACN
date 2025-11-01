@@ -16,4 +16,10 @@ router.get(
   middlewares.requireAuth,
   lessonController.listLessonsByCourse
 );
+router.get(
+  "/getLessonById/:id",
+  middlewares.requireAuth,
+  lessonController.getLessonById
+);
+
 module.exports = router;

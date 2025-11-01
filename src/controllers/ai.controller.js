@@ -34,7 +34,6 @@ exports.postChat = async (req, res) => {
       progress,
     });
 
-    // >>> PHẲNG
     const payload = {
       message,
       userId,

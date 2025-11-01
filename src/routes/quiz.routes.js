@@ -42,5 +42,5 @@ router.post(
 router.get("/stats/lesson/:lessonId", requireAuth, quizCtrl.statsByLesson);
 router.delete("/:lessonId/quizzes", requireAuth, quizCtrl.removeAllByLesson);
 // Lấy quiz của 1 lesson để LÀM BÀI
-router.get("/by-lesson/:lessonId", requireAuth, quizCtrl.forLessonToTake);
+router.get("/by-lesson/:lessonId/take", requireAuth, quizCtrl.forLessonToTake);
 module.exports = router;

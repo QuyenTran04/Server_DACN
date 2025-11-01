@@ -11,6 +11,9 @@ const chunkSchema = new Schema(
     sourceId: { type: Schema.Types.ObjectId, required: true, index: true },
     courseId: { type: Schema.Types.ObjectId, ref: "Course" },
     lessonId: { type: Schema.Types.ObjectId, ref: "Lesson" },
+    sourceIdStr: { type: String, index: true },
+    courseIdStr: { type: String, index: true },
+    lessonIdStr: { type: String, index: true },
 
     text: { type: String, required: true },
     vector: { type: [Number], default: [] }, // Atlas Vector Search sẽ index trường này

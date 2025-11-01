@@ -43,6 +43,8 @@ async function reindexCourse(doc) {
     source: "course",
     sourceId: courseId,
     courseId,
+    sourceIdStr: String(courseId),
+    courseIdStr: String(courseId),
     text,
     vector: vectors[i],
     dims,
