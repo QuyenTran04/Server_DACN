@@ -5,6 +5,7 @@ const Lesson = require("../models/Lesson");
 const Quiz = require("../models/Quiz");
 
 const { generateCourseDraftJSON } = require("../services/gemini.service");
+const { callLLMJSON } = require("../services/llm.service");
 const { normalizeQuizItems } = require("../services/quiz-ai.service");
 const { ensureLessons, indexByLetter } = require("../utils/quiz-normalize");
 
@@ -60,14 +61,46 @@ Số bài học mong muốn: ${numLessons}
 Mục tiêu: xây lộ trình học hợp lý, có mục tiêu từng bài.
     `.trim();
 
-    const draftRaw = await generateCourseDraftJSON({
-      systemPrompt,
-      userPrompt,
+    // Use schema-guided JSON call for reliability
+    const schema = {
+      title: "string",
+      description: "string",
+      categoryName: "string",
+      imagePrompt: "string",
+      lessons: [{ title: "string", content: "string" }],
+      quizzes: [
+        {
+          lessonIndex: 0,
+          items: [
+            { question: "string", options: [{ text: "string", imageUrl: "string" }], correctAnswers: ["A"] },
+          ],
+        },
+      ],
+    };
+    const draftRaw = await callLLMJSON({
+      system: systemPrompt,
+      user: userPrompt,
+      schema,
+      seedObject: { categoryName: "KhA�c", imagePrompt: "", lessons: [], quizzes: [] },
+      lang: language,
     });
     const lessons = ensureLessons(draftRaw.lessons).slice(
       0,
       Number(numLessons) || 8
     );
+    // Apply safe fallbacks so minimal fields are always present
+    if (!draftRaw.title) {
+      const _t = String(prompt || "").trim().slice(0, 120);
+      draftRaw.title = _t || "Khoa hoc moi";
+    }
+    if (!draftRaw.description) {
+      const parts = [];
+      const _p = String(prompt || "").trim();
+      if (_p) parts.push(`Khoa hoc ve: ${_p}.`);
+      if (targetAudience) parts.push(`Doi tuong: ${targetAudience}.`);
+      if (level) parts.push(`Cap do: ${level}.`);
+      draftRaw.description = parts.join(" ");
+    }
     if (!draftRaw.title || !draftRaw.description) {
       console.error("Invalid draft structure:", draftRaw);
       return res
