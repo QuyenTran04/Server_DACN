@@ -129,14 +129,51 @@ exports.submit = async (req, res) => {
     const quiz = await Quiz.findById(quizId);
     if (!quiz) return res.status(404).json({ message: "Quiz không tồn tại" });
 
-    const correctSet = new Set(
-      quiz.correctAnswers.map((s) => String(s).trim())
-    );
-    const selectedSet = new Set((selected || []).map((s) => String(s).trim()));
+    const correctAnswerStrings = (quiz.correctAnswers || []).map((s) => String(s).trim());
+    const selectedStrings = (selected || []).map((s) => String(s).trim());
+
+    // Extract option indices from selected (format: "quizId-index")
+    const selectedIndices = selectedStrings
+      .map((s) => {
+        const parts = s.split("-");
+        const idx = parseInt(parts[parts.length - 1], 10);
+        return isNaN(idx) ? s : String(idx);
+      });
+
+    // Build mapping of option text/id to index
+    const optionIds = (quiz.options || []).map((o, idx) => ({
+      index: String(idx),
+      id: o?._id?.toString() || o?.id || String(idx),
+      text: o?.text || "",
+    }));
+
+    // Convert correctAnswers (text or id) to indices
+    const correctIndices = correctAnswerStrings.map((ans) => {
+      // Try match by id first
+      let opt = optionIds.find((o) => o.id === ans);
+      // If not found, try match by text
+      if (!opt) {
+        opt = optionIds.find((o) => o.text === ans || o.text.trim() === ans.trim());
+      }
+      return opt?.index || ans;
+    });
+
+    console.log("[Quiz Submit Debug]", {
+      quizId,
+      question: quiz.question?.substring(0, 50),
+      correctAnswers: correctAnswerStrings,
+      correctIndices,
+      selected: selectedStrings,
+      selectedIndices,
+      optionsIds: optionIds.map((o) => ({ idx: o.index, id: o.id })),
+    });
+
+    const correctSet = new Set(correctIndices);
+    const selectedSet = new Set(selectedIndices);
 
     const isCorrect =
-      quiz.correctAnswers.length === selectedSet.size &&
-      quiz.correctAnswers.every((ans) => selectedSet.has(String(ans).trim()));
+      correctIndices.length === selectedSet.size &&
+      correctIndices.every((ans) => selectedSet.has(ans));
 
     const submission = await Submission.create({
       student,
@@ -147,8 +184,32 @@ exports.submit = async (req, res) => {
       correctAnswersSnapshot: quiz.correctAnswers,
     });
 
-    res.status(201).json({ isCorrect, submission });
+    console.log("[Quiz Submit Result]", { isCorrect, selectedSize: selectedSet.size, correctSize: correctIndices.length });
+
+    // Map back to option format for frontend
+    const correctAnswerOptions = correctIndices.map((idx) => {
+      const optIdx = parseInt(idx, 10);
+      return (quiz.options || [])[optIdx];
+    });
+
+    // Add correctAnswers to submission for frontend
+    const submissionWithAnswers = {
+      ...submission.toObject(),
+      correctAnswers: correctIndices.map((idx) => {
+        const optIdx = parseInt(idx, 10);
+        const opt = (quiz.options || [])[optIdx];
+        return opt?._id?.toString() || opt?.id || `${quizId}-${idx}`;
+      }),
+    };
+
+    res.status(201).json({ 
+      isCorrect, 
+      submission: submissionWithAnswers,
+      correctAnswers: correctIndices,
+      correctAnswerOptions,
+    });
   } catch (err) {
+    console.error("[Quiz Submit Error]", err);
     res.status(500).json({ message: err.message });
   }
 };

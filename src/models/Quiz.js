@@ -29,6 +29,12 @@ const quizSchema = new Schema(
       required: true,
       validate: (v) => Array.isArray(v) && v.length >= 1,
     },
+    language: {
+      type: String,
+      enum: ["vi", "en", "fr", "de", "es", "ja", "zh", "auto"],
+      default: "auto",
+      description: "Ngôn ngữ của quiz. 'auto' = tự detect từ question",
+    },
   },
   { timestamps: true }
 );
