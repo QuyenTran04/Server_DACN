@@ -19,12 +19,21 @@ exports.generateCourseDraft = async (req, res) => {
       language = "vi",
       numLessons = 8,
       includeQuizzes = true,
+      numQuizzesPerLesson = 3,
     } = req.body || {};
 
     if (!prompt)
       return res
         .status(400)
         .json({ message: "Thiếu prompt (chủ đề/mục tiêu khóa học)." });
+
+    // Fetch existing categories
+    const existingCategories = await Category.find().select("name").lean();
+    const categoryList = existingCategories.map((c) => c.name);
+    const categoryOptions =
+      categoryList.length > 0
+        ? categoryList.join(", ")
+        : "Lập Trình, Thiết Kế, Kinh Doanh, Ngoại Ngữ, Khác";
 
     const systemPrompt = `
 Bạn là trợ lý xây dựng khóa học cho LMS. Bắt buộc trả JSON theo schema:
@@ -41,7 +50,7 @@ Bạn là trợ lý xây dựng khóa học cho LMS. Bắt buộc trả JSON the
         {
           "question": string,
           "options": [{"text": string, "imageUrl"?: string}],
-          "correctAnswers": [string] // ví dụ ["A"] hoặc ["A","C"]
+          "correctAnswers": [string] // CHÍNH XÁC: trả text từ options, ví dụ ["Xcode"] hoặc ["Python", "JavaScript"]
         }
       ]
     }
@@ -49,7 +58,8 @@ Bạn là trợ lý xây dựng khóa học cho LMS. Bắt buộc trả JSON the
 }
 Ngôn ngữ trả về: ${language}.
 Yêu cầu: dàn bài rõ ràng, tăng dần độ khó; mô tả súc tích; KHÔNG markdown.
-${includeQuizzes ? "Có quizzes phù hợp từng bài." : "Không sinh quizzes."}
+DANH MỤC: PHẢI chọn categoryName từ danh sách sau: ${categoryOptions}. TUYỆT ĐỐI KHÔNG tạo danh mục mới!
+${includeQuizzes ? `Có quizzes phù hợp từng bài. CHÍNH XÁC: ${numQuizzesPerLesson} câu hỏi cho mỗi bài học.` : "Không sinh quizzes."}
     `.trim();
 
 
@@ -72,7 +82,7 @@ Mục tiêu: xây lộ trình học hợp lý, có mục tiêu từng bài.
         {
           lessonIndex: 0,
           items: [
-            { question: "string", options: [{ text: "string", imageUrl: "string" }], correctAnswers: ["A"] },
+            { question: "string", options: [{ text: "string", imageUrl: "string" }], correctAnswers: ["Xcode"] },
           ],
         },
       ],

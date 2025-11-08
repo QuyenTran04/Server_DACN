@@ -19,12 +19,16 @@ const {
  * @returns {string} - Văn bản sau khi trim/cắt ngắn
  */
 function trimToWordLimit(text, maxWords = 160) {
-  if (!text || typeof text !== "string") return "";
-  const words = text.trim().split(/\s+/);
-  if (words.length > maxWords) {
-    return words.slice(0, maxWords).join(" ") + "...";
-  }
-  return text.trim();
+  if (!text || typeof text !== "string" || maxWords <= 0) return "";
+  const normalized = text.trim();
+  if (!normalized) return "";
+
+  const tokens = normalized.match(/\S+\s*/g);
+  if (!tokens) return normalized;
+  if (tokens.length <= maxWords) return normalized;
+
+  const trimmed = tokens.slice(0, maxWords).join("").trimEnd();
+  return `${trimmed}...`;
 }
 
 /**
