@@ -170,12 +170,14 @@ function generateSystemPrompt(style = "general", lang = "vi") {
 1. Khái niệm cốt lõi (concept)
 2. Cách thực hiện (implementation/cách làm)
 3. Ví dụ code/ứng dụng cụ thể
-Rõ ràng, dễ hiểu, tránh lý thuyết quá phức tạp. Tập trung vào thực hành.`,
+Rõ ràng, dễ hiểu, tránh lý thuyết quá phức tạp. Tập trung vào thực hành.
+Nếu hiển thị code, PHẢI dùng khung Markdown \`\`\`<ngôn ngữ>\`\`\` và giữ nguyên định dạng.`,
       en: `You are a technical instructor. Explain:
 1. Core concept
 2. How to implement/apply it
 3. Concrete code or practical example
-Clear, practical, avoid over-complexity. Focus on hands-on learning.`,
+Clear, practical, avoid over-complexity. Focus on hands-on learning.
+Whenever you show code, wrap it in fenced Markdown with a language tag (e.g. \`\`\`js) and keep indentation.`,
     },
     science: {
       vi: `Bạn là giáo viên khoa học. Giải thích:
@@ -284,13 +286,17 @@ function generateUserInstruction(style = "general", lang = "vi") {
 - Giải thích lý do đáp án đúng dựa trên khái niệm/implementation
 - Nếu học sinh chọn sai, chỉ ra lỗi lập trình hoặc hiểu lầm concept
 - Đưa 1 ví dụ code hoặc ứng dụng cụ thể
+- LUÔN LUÔN bao code trong khung Markdown \`\`\`<ngôn ngữ> ... \`\`\` (VÍ DỤ: \`\`\`javascript hoặc \`\`\`python)
 - SCHEMA examples: { title?: string, content: "ví dụ code/ứng dụng", meaning?: "ghi chú/giải thích" }
+- Nếu content có code, PHẢI bao trong \`\`\`<language>\`\`\`
 - Tối đa 160 từ`,
       en: `[EXPLANATION INSTRUCTIONS]
 - Explain why the correct answer is right based on concept/implementation
 - If student chose wrong, point out the coding or conceptual error
 - Give 1 concrete code or practical example
+- ALWAYS wrap code in fenced Markdown \`\`\`<language> ... \`\`\` (EXAMPLE: \`\`\`javascript or \`\`\`python)
 - SCHEMA examples: { title?: string, content: "code/application example", meaning?: "note/explanation" }
+- If content contains code, MUST wrap in \`\`\`<language>\`\`\`
 - Max 160 words`,
     },
     science: {
@@ -605,6 +611,46 @@ function getStyleHint(style = "general", lang = "vi") {
   return hintObj[lang] || hintObj.vi;
 }
 
+/**
+ * Detect và wrap code nếu chưa có markdown fence
+ * @param {string} text - Text content
+ * @returns {string} - Text với code được wrap đúng
+ */
+function autoWrapCode(text) {
+  if (!text || typeof text !== "string") return text;
+
+  // Keywords để detect code
+  const codeKeywords = /(#include|#define|\btemplate\b|\bclass\b|\bdef\b|\bfunction\b|\bconst\b|\blet\b|\bvar\b|\bimport\b|\breturn\b|\bfor\b|\bwhile\b|\bif\b|\belse\b|=>|\bfrom\b|\brequire|\bconsole\.log|\.map|\.\w+\(|\{\s*\w+\s*:|function\s*\(|<\w+>|import\s+\{|export\s+|async\s+|await\s+|\.then|catch\s*\()/i;
+
+  // Nếu đã có markdown fence, return nguyên bản
+  if (text.includes("```")) {
+    return text;
+  }
+
+  // Detect code: có keywords + có dòng mới
+  const lines = text.split("\n");
+  const hasMultipleLines = lines.length >= 2;
+  const hasCodeKeyword = codeKeywords.test(text);
+  
+  if (hasMultipleLines && hasCodeKeyword) {
+    // Detect programming language
+    let lang = "text";
+    if (/\bfunction\b|\bconst\b|\blet\b|\bvar\b|=>|\bconsole\.log|import|export|require/.test(text)) {
+      lang = "javascript";
+    } else if (/\bdef\b|\bclass\b|import\s+\w+|:\s*$|\bfrom\b|\breturn\b/.test(text)) {
+      lang = "python";
+    } else if (/#include|#define|template|using\s+namespace|std::/.test(text)) {
+      lang = "cpp";
+    } else if (/\bclass\b|\bpublic\b|\bprivate\b|System\.out|import\s+java/.test(text)) {
+      lang = "java";
+    }
+
+    return `\`\`\`${lang}\n${text}\n\`\`\``;
+  }
+
+  return text;
+}
+
 module.exports = {
   analyzeCourseStyle,
   generateSystemPrompt,
@@ -612,4 +658,5 @@ module.exports = {
   buildUserPrompt,
   getStyleHint,
   extractKeyVocabulary,
+  autoWrapCode,
 };

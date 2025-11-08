@@ -11,6 +11,7 @@ const {
   buildUserPrompt,
   getStyleHint,
   extractKeyVocabulary,
+  autoWrapCode,
 } = require("../utils/dynamicPrompt.helper");
 /**
  * Kiểm tra độ dài của explanation để tránh lan man
@@ -23,12 +24,32 @@ function trimToWordLimit(text, maxWords = 160) {
   const normalized = text.trim();
   if (!normalized) return "";
 
+  // Không cắt ngắn khi nội dung chứa code fence để tránh làm hỏng Markdown
+  if (normalized.includes("```")) {
+    return normalized;
+  }
+
   const tokens = normalized.match(/\S+\s*/g);
   if (!tokens) return normalized;
   if (tokens.length <= maxWords) return normalized;
 
   const trimmed = tokens.slice(0, maxWords).join("").trimEnd();
   return `${trimmed}...`;
+}
+
+/**
+ * Đảm bảo Markdown code fence luôn được đóng/mở đầy đủ
+ * @param {string} text
+ * @returns {string}
+ */
+function ensureCodeFenceIntegrity(text) {
+  if (!text || typeof text !== "string") return "";
+  const trimmed = text.replace(/\s+$/, "");
+  const matches = trimmed.match(/```/g);
+  if (matches && matches.length % 2 !== 0) {
+    return `${trimmed}\n\`\`\``;
+  }
+  return trimmed;
 }
 
 /**
@@ -239,11 +260,15 @@ exports.explainQuiz = async (req, res) => {
     // 7) Trim explanation để tránh lan man
     const trimmedAi = {
       ...ai,
-      explanation: trimToWordLimit(ai.explanation, 160),
+      explanation: ensureCodeFenceIntegrity(
+        autoWrapCode(trimToWordLimit(ai.explanation, 160))
+      ),
       short_hint: trimToWordLimit(ai.short_hint, 50),
       examples: (ai.examples || []).map((ex) => ({
         title: ex.title,
-        content: trimToWordLimit(ex.content, 120),
+        content: ensureCodeFenceIntegrity(
+          autoWrapCode(trimToWordLimit(ex.content, 120))
+        ),
         meaning: trimToWordLimit(ex.meaning, 80),
       })),
     };
