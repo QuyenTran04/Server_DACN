@@ -71,7 +71,7 @@ exports.register = async (req, res) => {
       lastLoginAt: new Date(),
     });
 
-    const token = signAndSetCookie(res, { uid: user._id, role: user.role });
+    const token = signAndSetCookie(res, { id: user._id, role: user.role });
 
     return res.status(201).json({
       message: "Đăng ký thành công",
@@ -211,7 +211,7 @@ exports.loginWithGoogle = async (req, res) => {
       return res.status(403).json({ message: "Tài khoản đã bị vô hiệu hóa" });
     }
 
-    const token = signAndSetCookie(res, { uid: user._id, role: user.role });
+    const token = signAndSetCookie(res, { id: user._id, role: user.role });
 
     return res.json({
       message: "Đăng nhập Google thành công",
