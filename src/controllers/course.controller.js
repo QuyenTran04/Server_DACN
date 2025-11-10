@@ -92,6 +92,17 @@ exports.getCourses = async (req, res) => {
     } = req.query;
 
     const filter = buildFilterQuery(req.query);
+    // Chỉ hiển thị khóa học published hoặc của instructor hiện tại
+    const userId = req.user?.id || req.user?._id;
+    if (userId) {
+      filter.$or = [
+        { published: true },
+        { instructor: userId }
+      ];
+    } else {
+      filter.published = true;
+    }
+
     const sortObj = parseSort(sort);
     const skip = (Number(page) - 1) * Number(limit);
 
@@ -116,6 +127,30 @@ exports.getCourses = async (req, res) => {
   } catch (err) {
     console.error("getCourses error:", err);
     return res.status(500).json({ message: "Lấy khóa học thất bại" });
+  }
+};
+
+// Lấy khóa học do user tạo (đang đăng nhập)
+// Tất cả user (không phân biệt role) chỉ thấy khóa học mình tạo
+exports.getMyCourses = async (req, res) => {
+  try {
+    const userId = req.user?.id || req.user?._id;
+    if (!userId) {
+      return res.status(401).json({ message: "Chưa đăng nhập" });
+    }
+
+    const courses = await Course.find({ instructor: userId })
+      .sort({ createdAt: -1 })
+      .populate("category", "name")
+      .populate("instructor", "name email avatar role")
+      .lean();
+
+    return res.json({ total: courses.length, items: courses });
+  } catch (err) {
+    console.error("getMyCourses error:", err);
+    return res
+      .status(500)
+      .json({ message: "Lỗi server khi lấy khóa học của bạn" });
   }
 };
 

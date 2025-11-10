@@ -21,8 +21,18 @@ exports.normalizeQuizPayload = (q) => {
     .map((a) => String(a || "").trim())
     .filter(Boolean);
 
+  // Convert chữ cái (A, B, C, D) to option text
+  const convertedAnswers = correctAnswers.map((a) => {
+    const isLetter = /^[A-Z]$/.test(a);
+    if (isLetter) {
+      const idx = exports.indexByLetter(a);
+      return options[idx]?.text || a;
+    }
+    return a;
+  });
+
   const optionTexts = new Set(options.map((o) => o.text));
-  correctAnswers = correctAnswers.filter((a) => optionTexts.has(a));
+  correctAnswers = convertedAnswers.filter((a) => optionTexts.has(a));
 
   return { question, options, correctAnswers };
 };

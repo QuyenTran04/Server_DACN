@@ -12,6 +12,11 @@ router.post(
   Course.createCourse
 );
 router.get(
+  "/my",
+  middleware.requireAuth,
+  Course.getMyCourses
+);
+router.get(
   "/getCourses",
   Course.getCourses
 );

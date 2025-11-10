@@ -15,6 +15,22 @@ const courseSchema = new Schema(
     category: { type: Schema.Types.ObjectId, ref: "Category", required: true },
     instructor: { type: Schema.Types.ObjectId, ref: "User", required: true },
     published: { type: Boolean, default: false },
+    explanationGuideline: {
+      type: String,
+      enum: [
+        "technical",
+        "science",
+        "math",
+        "language",
+        "humanities",
+        "business",
+        "arts",
+        "auto",
+      ],
+      default: "auto",
+      description:
+        "Phong cách giải thích AI. 'auto' = tự phân tích từ title/description",
+    },
   },
   { timestamps: true }
 );
