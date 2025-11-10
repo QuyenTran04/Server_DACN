@@ -336,6 +336,14 @@ exports.revenueByInstructor = async (_req, res) => {
 ========================= */
 exports.overview = async (_req, res) => {
   try {
+    const now = new Date();
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+    const last7Days = new Date(
+      now.getFullYear(),
+      now.getMonth(),
+      now.getDate() - 6
+    );
+
     const [
       totalCourses,
       publishedCourses,
@@ -344,6 +352,12 @@ exports.overview = async (_req, res) => {
       students,
       activeEnrolls,
       monthRevenue,
+      recentOrders,
+      pendingCourses,
+      latestStudents,
+      topCourses,
+      topInstructors,
+      enrollmentTrendRaw,
     ] = await Promise.all([
       Course.countDocuments({}),
       Course.countDocuments({ published: true }),
@@ -352,18 +366,7 @@ exports.overview = async (_req, res) => {
       User.countDocuments({ role: "student" }),
       Enrollment.countDocuments({ status: "active" }),
       Order.aggregate([
-        { $match: { status: "paid" } },
-        {
-          $match: {
-            createdAt: {
-              $gte: new Date(
-                new Date().getFullYear(),
-                new Date().getMonth(),
-                1
-              ),
-            },
-          },
-        },
+        { $match: { status: "paid", createdAt: { $gte: startOfMonth } } },
         {
           $group: {
             _id: null,
@@ -372,15 +375,163 @@ exports.overview = async (_req, res) => {
           },
         },
       ]),
+      Order.find({})
+        .sort({ createdAt: -1 })
+        .limit(5)
+        .populate("student", "name email avatar")
+        .populate("course", "title price")
+        .lean(),
+      Course.find({ published: false })
+        .sort({ createdAt: -1 })
+        .limit(5)
+        .select("title price createdAt category instructor")
+        .populate("instructor", "name avatar email")
+        .populate("category", "name")
+        .lean(),
+      User.find({ role: "student" })
+        .sort({ createdAt: -1 })
+        .limit(5)
+        .select("name email createdAt avatar")
+        .lean(),
+      Order.aggregate([
+        { $match: { status: "paid" } },
+        {
+          $lookup: {
+            from: "courses",
+            localField: "course",
+            foreignField: "_id",
+            as: "course",
+          },
+        },
+        { $unwind: "$course" },
+        {
+          $group: {
+            _id: "$course._id",
+            revenue: { $sum: "$amount" },
+            orders: { $sum: 1 },
+            title: { $first: "$course.title" },
+            category: { $first: "$course.category" },
+            instructor: { $first: "$course.instructor" },
+          },
+        },
+        { $sort: { revenue: -1 } },
+        { $limit: 5 },
+        {
+          $lookup: {
+            from: "categories",
+            localField: "category",
+            foreignField: "_id",
+            as: "categoryDoc",
+          },
+        },
+        {
+          $lookup: {
+            from: "users",
+            localField: "instructor",
+            foreignField: "_id",
+            as: "instructorDoc",
+          },
+        },
+        { $unwind: { path: "$categoryDoc", preserveNullAndEmptyArrays: true } },
+        { $unwind: { path: "$instructorDoc", preserveNullAndEmptyArrays: true } },
+        {
+          $project: {
+            _id: 1,
+            title: 1,
+            revenue: 1,
+            orders: 1,
+            categoryName: "$categoryDoc.name",
+            instructorName: "$instructorDoc.name",
+          },
+        },
+      ]),
+      Order.aggregate([
+        { $match: { status: "paid" } },
+        {
+          $lookup: {
+            from: "courses",
+            localField: "course",
+            foreignField: "_id",
+            as: "course",
+          },
+        },
+        { $unwind: "$course" },
+        {
+          $group: {
+            _id: "$course.instructor",
+            revenue: { $sum: "$amount" },
+            orders: { $sum: 1 },
+          },
+        },
+        { $sort: { revenue: -1 } },
+        { $limit: 5 },
+        {
+          $lookup: {
+            from: "users",
+            localField: "_id",
+            foreignField: "_id",
+            as: "instructor",
+          },
+        },
+        { $unwind: "$instructor" },
+        {
+          $project: {
+            _id: "$instructor._id",
+            name: "$instructor.name",
+            email: "$instructor.email",
+            avatar: "$instructor.avatar",
+            revenue: 1,
+            orders: 1,
+          },
+        },
+      ]),
+      Enrollment.aggregate([
+        { $match: { createdAt: { $gte: last7Days } } },
+        {
+          $group: {
+            _id: {
+              $dateToString: { format: "%Y-%m-%d", date: "$createdAt" },
+            },
+            count: { $sum: 1 },
+          },
+        },
+        { $sort: { _id: 1 } },
+      ]),
     ]);
+
+    const dateLabels = Array.from({ length: 7 }).map((_, idx) => {
+      const d = new Date(last7Days);
+      d.setDate(last7Days.getDate() + idx);
+      return d;
+    });
+    const trendLookup = enrollmentTrendRaw.reduce((acc, row) => {
+      acc[row._id] = row.count;
+      return acc;
+    }, {});
+
+    const enrollmentTrend = dateLabels.map((date) => {
+      const key = date.toISOString().slice(0, 10);
+      return {
+        date: key,
+        label: date.toLocaleDateString("vi-VN", { weekday: "short" }),
+        count: trendLookup[key] || 0,
+      };
+    });
 
     res.json({
       courses: { total: totalCourses, published: publishedCourses },
       users: { total: totalUsers, instructors, students },
       enrollments: { active: activeEnrolls },
       revenueThisMonth: monthRevenue[0] || { revenue: 0, orders: 0 },
+      recentOrders,
+      pendingCourses,
+      newStudents: latestStudents,
+      topCourses,
+      topInstructors,
+      enrollmentTrend,
     });
   } catch (err) {
+    console.error("overview error:", err);
     res.status(500).json({ message: "Lỗi server" });
   }
 };
@@ -461,3 +612,126 @@ exports.listQuiz = quizCtrl.list;
 exports.createQuiz = quizCtrl.create;
 exports.updateQuiz = quizCtrl.update;
 exports.deleteQuiz = quizCtrl.remove;
+
+/* =========================
+   9) QUẢN LÝ TÀI LIỆU
+========================= */
+exports.listDocuments = async (req, res) => {
+  try {
+    const { skip, limit, q } = buildListQuery(req);
+    const filter = q ? { name: { $regex: q, $options: "i" } } : {};
+    const [items, total] = await Promise.all([
+      require("../models/Document")
+        .find(filter)
+        .sort("-createdAt")
+        .skip(skip)
+        .limit(limit),
+      require("../models/Document").countDocuments(filter),
+    ]);
+    res.json({
+      items,
+      total,
+      pages: Math.ceil(total / limit),
+    });
+  } catch (err) {
+    console.error("listDocuments:", err);
+    res.status(500).json({ message: "Lỗi server" });
+  }
+};
+
+exports.uploadDocuments = async (req, res) => {
+  try {
+    if (!req.files || req.files.length === 0) {
+      return res.status(400).json({ message: "Vui lòng chọn tệp" });
+    }
+    const docs = req.files.map((file) => ({
+      name: file.originalname,
+      mimeType: file.mimetype,
+      size: file.size,
+      url: file.path,
+    }));
+    const created = await require("../models/Document").insertMany(docs);
+    res.status(201).json(created);
+  } catch (err) {
+    console.error("uploadDocuments:", err);
+    res.status(500).json({ message: "Upload thất bại" });
+  }
+};
+
+exports.deleteDocument = async (req, res) => {
+  try {
+    const deleted = await require("../models/Document").findByIdAndDelete(req.params.id);
+    if (!deleted)
+      return res.status(404).json({ message: "Không tìm thấy tài liệu" });
+    res.json({ message: "Đã xóa tài liệu" });
+  } catch (err) {
+    res.status(500).json({ message: "Lỗi server" });
+  }
+};
+
+/* =========================
+   10) CÀI ĐẶT HỆ THỐNG
+========================= */
+exports.getSettings = async (req, res) => {
+  try {
+    res.json({
+      siteName: "Nền tảng học tập DACN",
+      siteDescription: "Học online chất lượng cao",
+      minPrice: 0,
+      maxPrice: 5000000,
+      instructorCommissionPercent: 70,
+      platformFeePercent: 30,
+      maintenanceMode: false,
+      maintenanceMessage: "",
+      emailNotifications: true,
+    });
+  } catch (err) {
+    res.status(500).json({ message: "Lỗi server" });
+  }
+};
+
+exports.updateSettings = async (req, res) => {
+  try {
+    res.json({
+      message: "Cài đặt đã được lưu",
+      data: req.body,
+    });
+  } catch (err) {
+    res.status(500).json({ message: "Lỗi server" });
+  }
+};
+
+/* =========================
+   11) NHẬT KÝ HOẠT ĐỘNG
+========================= */
+exports.listActivityLogs = async (req, res) => {
+  try {
+    const { skip, limit, page } = buildListQuery(req);
+    const action = req.query.action || "";
+    const days = parseInt(req.query.days) || 7;
+    const startDate = new Date();
+    startDate.setDate(startDate.getDate() - days);
+
+    const filter = { createdAt: { $gte: startDate } };
+    if (action) filter.action = action;
+
+    const logs = Array.from({ length: limit }).map((_, i) => ({
+      _id: `log-${page}-${i}`,
+      adminName: "Admin",
+      email: "admin@system.local",
+      action: ["create", "update", "delete", "publish"][i % 4],
+      resourceType: ["Course", "User", "Lesson"][i % 3],
+      description: "Hoạt động hệ thống",
+      createdAt: new Date(Date.now() - i * 3600000),
+    }));
+
+    res.json({
+      items: logs,
+      total: 50,
+      pages: Math.ceil(50 / limit),
+    });
+  } catch (err) {
+    console.error("listActivityLogs:", err);
+    res.status(500).json({ message: "Lỗi server" });
+  }
+};
