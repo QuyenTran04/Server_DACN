@@ -13,6 +13,8 @@ const quizRoutes = require("./routes/quiz.routes");
 const adminRoutes = require("./routes/admin.routes");
 const aiRoutes = require("./routes/ai.routes");
 const searchRoutes = require("./routes/search.routes");
+const documentRoutes = require("./routes/document.routes");
+const testRoutes = require("./routes/test.routes");
 
 connectDB();
 const app = express();
@@ -36,10 +38,12 @@ app.use("/api/categories", categoryRoutes);
 app.use("/api/courses", courseRoutes);
 app.use("/api/lessons", lessonRoutes);
 app.use("/api/quizzes", quizRoutes);
+app.use("/api/documents", documentRoutes);
 app.use("/api/admin", adminRoutes);
 app.use("/api/ai", aiRoutes);
 app.use("/api/embeddings", embeddingRoutes);
 app.use("/api/search", searchRoutes);
+app.use("/api/test", testRoutes);
 
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => console.log(`Server chạy trên cổng ${PORT}`));

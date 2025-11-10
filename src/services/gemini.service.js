@@ -24,6 +24,8 @@ function jitter(base) {
 function safeParseJson(text) {
   let raw = String(text || "").trim();
 
+  console.log(`[safeParseJson] Input (first 200 chars):`, raw.substring(0, 200));
+
   // 1) Gỡ code fences ```json ... ``` hoặc ```
   raw = raw
     .replace(/^```(?:json)?\s*/i, "")
@@ -32,8 +34,12 @@ function safeParseJson(text) {
 
   // 2) Thử parse trực tiếp
   try {
-    return JSON.parse(raw);
-  } catch {}
+    const parsed = JSON.parse(raw);
+    console.log(`[safeParseJson] ✓ Direct parse success`);
+    return parsed;
+  } catch (e) {
+    console.log(`[safeParseJson] Direct parse failed:`, e.message);
+  }
 
   // 3) Tìm object JSON đầu tiên có đủ cặp {} (simple balancing)
   const start = raw.indexOf("{");
@@ -47,7 +53,9 @@ function safeParseJson(text) {
         if (depth === 0) {
           const candidate = raw.slice(start, i + 1);
           try {
-            return JSON.parse(candidate);
+            const parsed = JSON.parse(candidate);
+            console.log(`[safeParseJson] ✓ Bracket balance parse success`);
+            return parsed;
           } catch {}
           break;
         }
@@ -59,10 +67,13 @@ function safeParseJson(text) {
   const m = raw.match(/\{[\s\S]*\}$/);
   if (m) {
     try {
-      return JSON.parse(m[0]);
+      const parsed = JSON.parse(m[0]);
+      console.log(`[safeParseJson] ✓ Regex match parse success`);
+      return parsed;
     } catch {}
   }
 
+  console.error(`[safeParseJson] ❌ All parse methods failed. Raw text:`, raw.substring(0, 500));
   throw new Error("AI JSON invalid");
 }
 /** Bóc JSON mảng một cách "chịu lỗi" */
@@ -173,6 +184,13 @@ async function callGeminiJSON({
   ensureKey();
   const url = geminiUrl;
 
+  console.log(`[callGeminiJSON] Calling Gemini API with:`, {
+    model: MODEL,
+    temperature,
+    maxOutputTokens,
+    promptLen: `system:${systemPrompt?.length || 0}, user:${userPrompt?.length || 0}`,
+  });
+
   const body = {
     contents: [
       {
@@ -181,6 +199,7 @@ async function callGeminiJSON({
     ],
     generationConfig: {
       temperature,
+      maxOutputTokens,
       responseMimeType: "application/json",
     },
   };
@@ -188,10 +207,14 @@ async function callGeminiJSON({
   let lastErr;
   for (let i = 0; i <= retries; i++) {
     try {
+      console.log(`[callGeminiJSON] Attempt ${i + 1}/${retries + 1}...`);
       const resp = await axios.post(url, body, { timeout: 60000 });
       const text =
         resp.data?.candidates?.[0]?.content?.parts?.[0]?.text ?? "{}";
-      //console.debug("[Gemini RAW]", (text || "").slice(0, 400));
+      console.log(`[callGeminiJSON] ✓ Response received:`, {
+        textLen: text?.length,
+        firstChars: text?.substring(0, 100),
+      });
       return safeParseJson(text);
     } catch (e) {
       lastErr = e;
