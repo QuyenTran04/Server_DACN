@@ -11,11 +11,15 @@ const { extractKeyVocabulary } = require("../utils/dynamicPrompt.helper");
 const { generateLessonDocument } = require("../services/document-ai.service");
 
 const AUTO_LESSON_MIN = 6;
-const AUTO_LESSON_MAX = 15;
-const QUIZ_MIN_PER_LESSON = 1;
-// const QUIZ_MAX_PER_LESSON = Infinity; // no cap
+const AUTO_LESSON_MAX = 20;
+const QUIZ_MIN_PER_LESSON = 10;
+const QUIZ_MAX_PER_LESSON = 50;
 
 const MIN_LESSON_TARGET = Math.min(AUTO_LESSON_MIN, AUTO_LESSON_MAX);
+
+function escapeRegExp(str = "") {
+  return String(str).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
 
 function ensureLessonCoverage(lessons = [], topicHint = "chu de") {
   const filled = [...lessons];
@@ -30,9 +34,10 @@ function ensureLessonCoverage(lessons = [], topicHint = "chu de") {
   return filled;
 }
 
-function buildFallbackQuizItems(lessonTitle = "Bai hoc") {
+function buildFallbackQuizItems(lessonTitle = "Bai hoc", lessonContent = "") {
   const safeTitle = lessonTitle || "Bai hoc";
-  return [
+  const text = String(lessonContent || "");
+  const defaultQuestions = [
     {
       question: `Noi dung chinh cua bai "${safeTitle}" la gi?`,
       options: [
@@ -54,15 +59,96 @@ function buildFallbackQuizItems(lessonTitle = "Bai hoc") {
       correctAnswers: [`Cach ap dung "${safeTitle}" vao bai toan thuc te`],
     },
   ];
+
+  if (!text.trim()) return defaultQuestions;
+
+  const sentences = (text.match(/[^.!?\n]+[.!?]?/g) || [])
+    .map((s) => s.trim())
+    .filter((s) => s.length >= 30);
+  const keyTerms = extractKeyVocabulary(text, 8).filter(Boolean);
+  if (!sentences.length || !keyTerms.length) {
+    return defaultQuestions;
+  }
+
+  const fillerOptions = [
+    "Mot noi dung khong co trong bai hoc",
+    "Mot vi du ngoai pham vi bai",
+    "Mot khai niem khac chua duoc de cap",
+  ];
+  const usedSentences = new Set();
+  const fallbackItems = [];
+
+  for (const term of keyTerms) {
+    const regex = new RegExp(`\\b${escapeRegExp(term)}\\b`, "i");
+    const sentence = sentences.find(
+      (s) => regex.test(s) && !usedSentences.has(s)
+    );
+    if (!sentence) continue;
+
+    usedSentences.add(sentence);
+    const blankSentence = sentence.replace(regex, "_____");
+    const distractorCandidates = keyTerms.filter((t) => t !== term);
+    const optionTexts = [];
+    const addOption = (value) => {
+      const normalized = String(value || "").trim();
+      if (
+        normalized &&
+        !optionTexts.some(
+          (opt) => opt.toLowerCase() === normalized.toLowerCase()
+        )
+      ) {
+        optionTexts.push(normalized);
+      }
+    };
+
+    addOption(term);
+    distractorCandidates.slice(0, 3).forEach(addOption);
+    for (const filler of fillerOptions) {
+      if (optionTexts.length >= 4) break;
+      addOption(filler);
+    }
+    while (optionTexts.length < 4) {
+      addOption(`Lua chon khac ${optionTexts.length + 1}`);
+    }
+
+    fallbackItems.push({
+      question: `Dien tu thich hop de hoan thanh kien thuc trong bai "${safeTitle}": ${blankSentence}`,
+      options: optionTexts.slice(0, 4).map((text) => ({ text })),
+      correctAnswers: [term],
+    });
+
+    if (fallbackItems.length >= QUIZ_MIN_PER_LESSON) break;
+  }
+
+  return fallbackItems.length
+    ? fallbackItems.concat(defaultQuestions)
+    : defaultQuestions;
 }
 
 function recommendQuizCountForLesson(content = "") {
   const text = String(content || "");
+  if (!text.trim().length) return QUIZ_MIN_PER_LESSON;
+
   const words = text.split(/\s+/).filter(Boolean).length;
-  const sentences = text.split(/[.!?\n]+/).filter(s => s.trim().length > 0).length;
-  const base = Math.max(Math.round(words / 250), Math.round(sentences / 5));
-  const target = Math.max(1, base || 1);
-  return target;
+  const sentences = text
+    .split(/[.!?]+/)
+    .filter((s) => s.trim().length > 0).length;
+  const paragraphs = text
+    .split(/\n{2,}/)
+    .filter((s) => s.trim().length > 0).length;
+  const bulletMatches = text.match(/(^|\n)\s*[-*+]\s+/g) || [];
+  const headingMatches = text.match(/(^|\n)(#+|\d+\.)\s+/g) || [];
+
+  const wordScore = Math.ceil(words / 140);
+  const sentenceScore = Math.ceil(sentences / 4);
+  const structureScore = Math.ceil((paragraphs + headingMatches.length) / 1.5);
+  const bulletScore = Math.ceil(bulletMatches.length / 2);
+
+  const base = Math.max(wordScore, sentenceScore, structureScore, bulletScore);
+  return Math.min(
+    QUIZ_MAX_PER_LESSON,
+    Math.max(QUIZ_MIN_PER_LESSON, base || QUIZ_MIN_PER_LESSON)
+  );
 }
 
 function ensureQuizCoverage(lessons = [], quizBuckets = new Map()) {
@@ -72,7 +158,10 @@ function ensureQuizCoverage(lessons = [], quizBuckets = new Map()) {
     const target = recommendQuizCountForLesson(lessons[i]?.content || "");
     let items = existingItems;
     if (items.length < target) {
-      const fallback = buildFallbackQuizItems(lessons[i]?.title);
+      const fallback = buildFallbackQuizItems(
+        lessons[i]?.title,
+        lessons[i]?.content
+      );
       const needed = Math.max(0, target - items.length);
       if (needed > 0) {
         items = items.concat(fallback.slice(0, needed));
@@ -90,6 +179,8 @@ async function generateExtraQuizItems({ lessonTitle, lessonContent, needed, lang
     "Ban la tro ly soan trac nghiem cho khoa hoc LMS.",
     "Tra JSON theo schema: { items: [{ question: string, options: [{text:string}], correctAnswers: [string] }] }",
     "Yeu cau: moi cau hoi co 4 phuong an, chi ra dap an dung bang text trong options, khong markdown, ngon ngu phu hop.",
+    "Chi tao cau hoi dua tren kien thuc co trong noi dung bai hoc duoc cung cap, khong tu y bo sung kien thuc ngoai.",
+    "Moi cau hoi phai ro rang lien he den thong tin cu the cua bai hoc (y chinh, buoc thuc hanh, so lieu hoac dinh nghia).",
   ].join("\n");
   const user = [
     `Bai hoc: ${lessonTitle || ""}`,
@@ -103,7 +194,7 @@ async function generateExtraQuizItems({ lessonTitle, lessonContent, needed, lang
     const items = Array.isArray(res?.items) ? res.items : [];
     return normalizeQuizItems(items).slice(0, needed);
   } catch (err) {
-    return buildFallbackQuizItems(lessonTitle).slice(0, needed);
+    return buildFallbackQuizItems(lessonTitle, lessonContent).slice(0, needed);
   }
 }
 // POST /api/ai/courses/draft
