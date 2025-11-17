@@ -5,17 +5,22 @@ const {
   autoWrapCode,
 } = require("../utils/dynamicPrompt.helper");
 
-const MIN_CONTENT_CHARS = 1100;
+function isProgrammingCourse(courseTitle = "", lessonTitle = "") {
+  const text = `${courseTitle} ${lessonTitle}`.toLowerCase();
+  return /lập\s*trình|programming|code|python|javascript|js|java|c\+\+|react|node|sql|database|api|backend|frontend|web|app|software/i.test(text);
+}
+
+const MIN_CONTENT_CHARS = 2500; // Tăng để tài liệu chi tiết hơn
 const MAX_CONTEXT_CHARS = 3200;
 const MAX_DOC_ATTEMPTS = 2;
 const DOC_SECTIONS = {
   vi: [
-    "## Muc tieu hoc tap",
-    "## Kien thuc cot loi",
-    "## Quy trinh / Cong thuc",
-    "## Vi du thuc tien",
-    "## Bai tap luyen tap",
-    "## Ghi nho & tiep tuc hoc",
+    "## Mục tiêu học tập",
+    "## Kiến thức cốt lõi",
+    "## Quy trình / Công thức",
+    "## Ví dụ thực tiễn",
+    "## Bài tập luyện tập",
+    "## Ghi nhớ & tiếp tục học",
   ],
   en: [
     "## Learning Objectives",
@@ -37,7 +42,7 @@ function clampText(text = "", limit = MAX_CONTEXT_CHARS) {
 function splitIntoBullets(text = "", language = "vi") {
   const placeholder =
     language === "vi"
-      ? "- Noi dung dang cap nhat tu ban thao bai hoc."
+      ? "- Nội dung đang cập nhật từ bản thảo bài học."
       : "- Content will be expanded from the lesson outline.";
   const segments = text
     .replace(/\r/g, "\n")
@@ -79,9 +84,9 @@ function coversKeyTerms(content = "", keyTerms = []) {
 
 function buildSystemPrompt(language = "vi", level = "Beginner") {
   if (language === "vi") {
-    return `Ban la chuyen gia thiet ke tai lieu hoc tap cap ${level}.
-Tao tai lieu chi tiet gan voi noi dung bai hoc, dung markdown va giai thich de hieu.
-Tra ve JSON hop le voi cac truong yeu cau.`;
+    return `Bạn là chuyên gia thiết kế tài liệu học tập cấp ${level}.
+Tạo tài liệu chi tiết gắn với nội dung bài học, dùng markdown và giải thích dễ hiểu.
+Trả về JSON hợp lệ với các trường yêu cầu.`;
   }
   return `You are an instructional designer building ${level} lesson documents.
 Return comprehensive markdown content tightly aligned to the lesson, strictly as valid JSON.`;
@@ -103,26 +108,26 @@ function buildUserPrompt(context) {
     .join("\n");
   const keywordLine = keyTerms?.length
     ? language === "vi"
-      ? `Tu khoa bat buoc phai giai thich: ${keyTerms.join(", ")}.`
+      ? `Từ khóa bắt buộc phải giải thích: ${keyTerms.join(", ")}.`
       : `Key concepts that must be covered: ${keyTerms.join(", ")}.`
     : "";
   const baseVi = `
-Khoa hoc: ${courseTitle || "Chua xac dinh"}
-Mo ta: ${courseDescription || "Chua co mo ta"}
-Cap do: ${level}
-Bai hoc: ${lessonTitle}
-Noi dung phac thao/ghi chu hien co:
-${condensedContent || "Chua co noi dung, hay tu tao tai lieu hoan chinh."}
+Khóa học: ${courseTitle || "Chưa xác định"}
+Mô tả: ${courseDescription || "Chưa có mô tả"}
+Cấp độ: ${level}
+Bài học: ${lessonTitle}
+Nội dung phác thảo/ghi chú hiện có:
+${condensedContent || "Chưa có nội dung, hãy tự tạo tài liệu hoàn chỉnh."}
 ${keywordLine}
 
-Cau truc bat buoc (giu nguyen tieu de, dung markdown):
+Cấu trúc bắt buộc (giữ nguyên tiêu đề, dùng markdown):
 ${structureLines}
 
-Yeu cau:
-- Moi muc co giai thich chi tiet, ket hop vi du va ung dung thuc te
-- Noi dung toi thieu 1200 ky tu, uu tien thong tin bam sat bai hoc
-- Them 3-4 bai tap o phan "${sections[4].replace("## ", "" )}"
-- Tra JSON duy nhat voi cac truong title, content, summary, tags.`.trim();
+Yêu cầu:
+- Mỗi mục có giải thích chi tiết, kết hợp ví dụ và ứng dụng thực tế
+- Nội dung tối thiểu 1200 ký tự, ưu tiên thông tin bám sát bài học
+- Thêm 3-4 bài tập ở phần "${sections[4].replace("## ", "" )}"
+- Trả JSON duy nhất với các trường title, content, summary, tags.`.trim();
   const baseEn = `
 Course: ${courseTitle || "Untitled"}
 Description: ${courseDescription || "No description"}
@@ -147,15 +152,22 @@ function normalizeDocumentPayload(rawDoc = {}, context) {
   const title =
     rawDoc.title?.trim() ||
     (context.language === "vi"
-      ? `Tai lieu: ${context.lessonTitle}`
+      ? `Tài liệu: ${context.lessonTitle}`
       : `Lesson Notes: ${context.lessonTitle}`);
   const summary =
     rawDoc.summary?.trim() ||
     (context.language === "vi"
-      ? `Tong hop kien thuc chinh cua "${context.lessonTitle}".`
+      ? `Tổng hợp kiến thức chính của "${context.lessonTitle}".`
       : `Summary of the key points for "${context.lessonTitle}".`);
   const tags = sanitizeTags(rawDoc.tags, context.keyTerms, context.lessonTitle);
-  const content = autoWrapCode((rawDoc.content || "").trim());
+  let content = (rawDoc.content || "").trim();
+  // Remove existing code block wrappers
+  content = content.replace(/^```[\w]*\n?/gm, "").replace(/\n?```$/gm, "").trim();
+  
+  // Only wrap in code block for programming courses
+  if (isProgrammingCourse(courseTitle, context.lessonTitle)) {
+    content = autoWrapCode(content);
+  }
   return {
     title,
     summary,
@@ -181,14 +193,14 @@ function buildFallbackDocument(context) {
   const localized =
     context.language === "vi"
       ? {
-          intro: `- Hieu ro muc tieu cua bai "${context.lessonTitle}".\n- Nam vung cac khai niem: ${keyTermText}.\n- Lien he voi tinh huong thuc te trong khoa "${context.courseTitle}".`,
-          process: `- Trinh bay lai tung buoc hoac cong thuc chinh lien quan toi ${keyTermText}.\n- Giai thich dieu kien ap dung va luu y quan trong.`,
-          examples: `- Vi du 1: Ap dung ${context.lessonTitle} trong cong viec thuc te.\n- Vi du 2: Ket hop ${keyTermList[0] || context.lessonTitle} voi cong cu khac.`,
-          practice: `1. Viet lai kien thuc bang loi cua ban.\n2. Ap dung ${context.lessonTitle} vao bai toan ban dang theo duoi.\n3. Tim them mot vi du trong linh vuc cua ban.`,
-          recap: `- On lai cac cong thuc/kien thuc cot loi.\n- Soan ghi chu ca nhan cho bai tiep theo.\n- Ghi lai cau hoi can giai dap.` ,
+          intro: `- Hiểu rõ mục tiêu của bài "${context.lessonTitle}".\n- Nắm vững các khái niệm: ${keyTermText}.\n- Liên hệ với tình huống thực tế trong khóa "${context.courseTitle}".`,
+          process: `- Trình bày lại từng bước hoặc công thức chính liên quan tới ${keyTermText}.\n- Giải thích điều kiện áp dụng và lưu ý quan trọng.`,
+          examples: `- Ví dụ 1: Áp dụng ${context.lessonTitle} trong công việc thực tế.\n- Ví dụ 2: Kết hợp ${keyTermList[0] || context.lessonTitle} với công cụ khác.`,
+          practice: `1. Viết lại kiến thức bằng lời của bạn.\n2. Áp dụng ${context.lessonTitle} vào bài toán bạn đang theo đuổi.\n3. Tìm thêm một ví dụ trong lĩnh vực của bạn.`,
+          recap: `- Ôn lại các công thức/kiến thức cốt lõi.\n- Soạn ghi chú cá nhân cho bài tiếp theo.\n- Ghi lại câu hỏi cần giải đáp.` ,
           overview: context.condensedContent
-            ? `Ban thao hien co nhan manh: ${context.condensedContent}`
-            : `Chua co noi dung mau, hay khai thac toan bo kien thuc quanh chu de "${context.lessonTitle}".`,
+            ? `Bản thảo hiện có nhấn mạnh: ${context.condensedContent}`
+            : `Chưa có nội dung mẫu, hãy khai thác toàn bộ kiến thức quanh chủ đề "${context.lessonTitle}".`,
         }
       : {
           intro: `- Understand what "${context.lessonTitle}" tries to achieve.\n- Master concepts such as ${keyTermText}.\n- Connect the lesson with real scenarios inside "${context.courseTitle}".`,
@@ -207,7 +219,7 @@ function buildFallbackDocument(context) {
   const bulletContent = splitIntoBullets(bulletSource, context.language).join(
     "\n"
   );
-  const fallback = autoWrapCode(
+  const fallback = (
     [
       `# ${context.lessonTitle}`,
       `${sections[0]}\n${localized.intro}`,
@@ -221,11 +233,11 @@ function buildFallbackDocument(context) {
   return {
     title:
       context.language === "vi"
-        ? `Tai lieu: ${context.lessonTitle}`
+        ? `Tài liệu: ${context.lessonTitle}`
         : `Lesson Notes: ${context.lessonTitle}`,
     summary:
       context.language === "vi"
-        ? `Tai lieu tong hop day du noi dung bai "${context.lessonTitle}".`
+        ? `Tài liệu tổng hợp đầy đủ nội dung bài "${context.lessonTitle}".`
         : `Comprehensive summary for "${context.lessonTitle}".`,
     tags: sanitizeTags([], context.keyTerms, context.lessonTitle),
     content: fallback,
@@ -292,7 +304,7 @@ async function createDocumentWithRetry(context) {
 function buildContext(input = {}) {
   const language = input.language || "vi";
   const lessonTitle =
-    input.lessonTitle?.trim() || (language === "vi" ? "Bai hoc" : "Lesson");
+    input.lessonTitle?.trim() || (language === "vi" ? "Bài học" : "Lesson");
   const lessonContent = (input.lessonContent || "").trim();
   const context = {
     lessonTitle,
@@ -353,16 +365,16 @@ async function answerQuestionAboutDocument({
   try {
     const systemPrompt =
       language === "vi"
-        ? `Ban la gia su ho tro hoc tap.\nTra loi cau hoi cua hoc vien du tren tai lieu cung cap.\n- Giai thich ro rang, de hieu\n- Su dung vi du trong tai lieu neu phu hop\n- Neu cau hoi nam ngoai pham vi thi thong bao ro va dua huong dan chung\n- Huong dan tung buoc neu la cau hoi ky thuat`
+        ? `Bạn là gia sư hỗ trợ học tập.\nTrả lời câu hỏi của học viên dựa trên tài liệu cung cấp.\n- Giải thích rõ ràng, dễ hiểu\n- Sử dụng ví dụ trong tài liệu nếu phù hợp\n- Nếu câu hỏi nằm ngoài phạm vi thì thông báo rõ và đưa hướng dẫn chung\n- Hướng dẫn từng bước nếu là câu hỏi kỹ thuật`
         : `You are a tutor helping students understand the material.\nAnswer based on the provided document.\n- Be clear and easy to understand\n- Cite examples from the document when relevant\n- If the question is out of scope, say so and give general guidance\n- Provide step-by-step reasoning for technical topics`;
 
     const userPrompt =
       language === "vi"
-        ? `Tai lieu: "${documentTitle}"
-Noi dung tai lieu:
+        ? `Tài liệu: "${documentTitle}"
+Nội dung tài liệu:
 ${documentContent}
 
-Cau hoi: ${question}`
+Câu hỏi: ${question}`
         : `Document: "${documentTitle}"
 Document content:
 ${documentContent}
@@ -393,16 +405,16 @@ async function generateExampleFromDocument({
   try {
     const systemPrompt =
       language === "vi"
-        ? `Ban la chuyen gia tao vi du minh hoa.\n- Tao vi du cu the, de hieu, lien quan den chu de\n- Neu co tai lieu, hay lay ngu canh tu tai lieu\n- Tra loi bang markdown`
+        ? `Bạn là chuyên gia tạo ví dụ minh họa.\n- Tạo ví dụ cụ thể, dễ hiểu, liên quan đến chủ đề\n- Nếu có tài liệu, hãy lấy ngữ cảnh từ tài liệu\n- Trả lời bằng markdown`
         : `You are an expert creating illustrative examples.\n- Produce concrete, easy-to-follow examples for the topic\n- Use the provided document context when relevant\n- Respond in markdown`;
 
     const userPrompt =
       language === "vi"
-        ? `Tao vi du chi tiet cho chu de: "${topic}"
-Tai lieu lien quan:
+        ? `Tạo ví dụ chi tiết cho chủ đề: "${topic}"
+Tài liệu liên quan:
 ${documentContent}
 
-Hay tao vi du thuc te va de ung dung.`
+Hãy tạo ví dụ thực tế và dễ ứng dụng.`
         : `Create a detailed example for the topic: "${topic}"
 Related document:
 ${documentContent}

@@ -3,6 +3,8 @@ const express = require("express");
 const cookieParser = require("cookie-parser");
 const connectDB = require("./configs/database");
 const cors = require("cors");
+const { initAgenda, defineGenerateDocumentJob } = require("./configs/agenda");
+const { defineGenerateDocumentJob: setupDocumentJob } = require("./services/document-generation.service");
 
 const embeddingRoutes = require("./routes/embedding.routes");
 const authRoutes = require("./routes/auth.routes");
@@ -28,6 +30,7 @@ app.use(
     credentials: true, // bắt buộc nếu dùng cookie httpOnly
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization"],
+    exposedHeaders: ["Content-Type"],
   })
 );
 
@@ -46,5 +49,33 @@ app.use("/api/search", searchRoutes);
 app.use("/api/test", testRoutes);
 
 const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => console.log(`Server chạy trên cổng ${PORT}`));
+
+// Khởi tạo Agenda và định nghĩa jobs
+(async () => {
+  try {
+    // Chờ MongoDB kết nối xong trước
+    await new Promise((resolve) => {
+      const checkConnection = () => {
+        if (require("mongoose").connection.readyState === 1) {
+          resolve();
+        } else {
+          setTimeout(checkConnection, 500);
+        }
+      };
+      checkConnection();
+    });
+
+    // Khởi tạo Agenda
+    await initAgenda(process.env.MONGO_URI);
+
+    // Định nghĩa jobs
+    setupDocumentJob();
+
+    // Start server
+    app.listen(PORT, () => console.log(`Server chạy trên cổng ${PORT}`));
+  } catch (err) {
+    console.error("[Server] Lỗi khởi tạo Agenda:", err.message);
+    process.exit(1);
+  }
+})();
 
