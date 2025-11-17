@@ -59,4 +59,16 @@ router.post("/quiz", admin.createQuiz);
 router.put("/quiz/:id", admin.updateQuiz);
 router.delete("/quiz/:id", admin.deleteQuiz);
 
+/* ===== 9) Tài liệu ===== */
+router.get("/documents", admin.listDocuments);
+router.post("/documents/upload", admin.uploadDocuments);
+router.delete("/documents/:id", admin.deleteDocument);
+
+/* ===== 10) Cài đặt ===== */
+router.get("/settings", admin.getSettings);
+router.post("/settings", admin.updateSettings);
+
+/* ===== 11) Nhật ký hoạt động ===== */
+router.get("/activity-logs", admin.listActivityLogs);
+
 module.exports = router;

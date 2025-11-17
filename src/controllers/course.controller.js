@@ -46,7 +46,7 @@ exports.createCourse = async (req, res) => {
     }
     const { title, description, category, published, price } = req.body;
 
-    console.log("Du lieu:", { title, description, category, published, price, file: req.file ? true : false });
+    console.log("Dữ liệu:", { title, description, category, published, price, file: req.file ? true : false });
     if (!title || !description || !category) {
       return res
         .status(400)
@@ -246,5 +246,39 @@ exports.updateCourse = async (req, res) => {
   } catch (err) {
     console.error("updateCourse error:", err);
     return res.status(500).json({ message: "Cập nhật khóa học thất bại" });
+  }
+};
+
+exports.deleteCourse = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const instructor = req.user?.id || req.user?._id;
+
+    if (!instructor) {
+      return res.status(401).json({ message: "Chưa đăng nhập" });
+    }
+
+    const course = await Course.findById(id);
+    if (!course) {
+      return res.status(404).json({ message: "Khóa học không tồn tại" });
+    }
+
+    if (String(course.instructor) !== String(instructor) && req.user?.role !== "admin") {
+      return res.status(403).json({ message: "Bạn không có quyền xóa khóa học này" });
+    }
+
+    const Lesson = require("../models/Lesson");
+    const Quiz = require("../models/Quiz");
+    const Document = require("../models/Document");
+
+    await Lesson.deleteMany({ course: id });
+    await Quiz.deleteMany({ course: id });
+    await Document.deleteMany({ course: id });
+    await Course.deleteOne({ _id: id });
+
+    return res.json({ message: "Khóa học đã được xóa thành công" });
+  } catch (err) {
+    console.error("deleteCourse error:", err);
+    return res.status(500).json({ message: "Xóa khóa học thất bại" });
   }
 };

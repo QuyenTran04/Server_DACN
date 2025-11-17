@@ -450,3 +450,93 @@ exports.forLessonToTake = async (req, res) => {
     res.status(500).json({ message: err.message });
   }
 };
+
+// 🎯 Generate quizzes on-demand
+exports.generateQuizzes = async (req, res) => {
+  try {
+    const { lessonId, questionCount = 5 } = req.body;
+    const userId = req.user?._id || req.user?.id;
+    
+    if (!userId) {
+      return res.status(401).json({ message: "Bạn chưa đăng nhập" });
+    }
+
+    if (!lessonId) {
+      return res.status(400).json({ message: "Thiếu lessonId" });
+    }
+
+    const numQuestions = Math.min(Math.max(1, parseInt(questionCount) || 5), 20);
+    
+    console.log(`[generateQuizzes] User ${userId} generating ${numQuestions} questions for lesson: ${lessonId}`);
+
+    // Fetch lesson & course info
+    const lesson = await Lesson.findById(lessonId).populate('course');
+    if (!lesson) {
+      return res.status(404).json({ message: "Bài học không tồn tại" });
+    }
+
+    const course = lesson.course;
+    if (!course) {
+      return res.status(404).json({ message: "Khóa học không tồn tại" });
+    }
+
+    // Verify user is course instructor (optional - allow for now)
+    // In future: only allow if user._id === course.instructor._id OR user is admin
+    console.log(`[generateQuizzes] Course instructor: ${course.instructor}, User: ${userId}`);
+
+    // Check if quizzes already exist for this lesson
+    const existingQuizzes = await Quiz.countDocuments({ lesson: lessonId });
+    if (existingQuizzes > 0) {
+      console.warn(`[generateQuizzes] Quiz already exists for lesson ${lessonId}`);
+      return res.status(409).json({ 
+        message: "Bài học này đã có bộ câu hỏi rồi",
+        existingCount: existingQuizzes 
+      });
+    }
+
+    // Import helper functions
+    const { generateExtraQuizItems } = require('./aiCourse.controller');
+    const { indexByLetter } = require('../utils/quiz-normalize');
+    
+    // Generate quiz items using AI
+    const quizItems = await generateExtraQuizItems({
+      lessonTitle: lesson.title,
+      lessonContent: lesson.content || "",
+      needed: numQuestions,
+    });
+
+    if (!quizItems || quizItems.length === 0) {
+      return res.status(500).json({ message: "Không thể tạo câu hỏi. Vui lòng thử lại" });
+    }
+
+    // Save quizzes to database
+    const createdQuizzes = [];
+    for (const item of quizItems) {
+      const quiz = await Quiz.create({
+        course: course._id,
+        lesson: lessonId,
+        question: item.question,
+        options: (item.options || []).map((o) => ({
+          text: o.text,
+          imageUrl: o.imageUrl || null,
+        })),
+        correctAnswers: Array.isArray(item.correctAnswers)
+          ? item.correctAnswers
+          : [indexByLetter(item.correctAnswers ?? 0)],
+      });
+      createdQuizzes.push(quiz);
+    }
+
+    console.log(`[generateQuizzes] ✅ Created ${createdQuizzes.length} quizzes for lesson ${lessonId}`);
+
+    res.status(201).json({
+      message: `Đã tạo ${createdQuizzes.length} câu hỏi thành công`,
+      lessonId,
+      count: createdQuizzes.length,
+      quizzes: createdQuizzes,
+    });
+  } catch (err) {
+    console.error("[generateQuizzes] Error:", err.message);
+    res.status(500).json({ message: err.message });
+  }
+};

@@ -2,6 +2,9 @@ const axios = require("axios");
 
 const apiKey = process.env.GEMINI_API_KEY;
 const MODEL = process.env.GEMINI_MODEL || "gemini-2.0-flash";
+const TTS_MODEL =
+  process.env.GEMINI_TTS_MODEL || "gemini-2.5-flash-preview-tts";
+const DEFAULT_TTS_VOICE = process.env.GEMINI_TTS_VOICE || "Puck";
 const MAX_TOKENS = Number(process.env.GEMINI_MAX_TOKENS || 2048);
 const TEMPERATURE = Number(process.env.GEMINI_TEMPERATURE || 0.4);
 function ensureKey() {
@@ -264,10 +267,66 @@ async function chatWithGemini({ system, user }) {
     return "Xin lỗi, hệ thống AI đang bận. Vui lòng thử lại sau.";
   }
 }
+
+async function callGeminiTTS({
+  text,
+  voice = DEFAULT_TTS_VOICE,
+  speakingRate = 1,
+  outputFormat = "mp3",
+  timeout = 90000,
+} = {}) {
+  ensureKey();
+  const content = String(text || "").trim();
+  if (!content) {
+    throw new Error("Thiếu nội dung để chuyển giọng đọc.");
+  }
+  const format = outputFormat.toLowerCase();
+  const mimeType =
+    format === "wav"
+      ? "audio/wav"
+      : format === "ogg"
+        ? "audio/ogg"
+        : "audio/mp3";
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${TTS_MODEL}:generateContent?key=${process.env.GEMINI_API_KEY}`;
+  const body = {
+    contents: [{ parts: [{ text: content }] }],
+    generationConfig: {
+      responseModalities: ["AUDIO"],
+      speechConfig: {
+        voiceConfig: {
+          prebuiltVoiceConfig: {
+            voiceName: voice || DEFAULT_TTS_VOICE,
+          }
+        }
+      }
+    }
+  };
+  console.log("[callGeminiTTS] Voice:", voice, "TextLen:", content.length);
+  console.log("[callGeminiTTS] Calling API...");
+  
+  const resp = await axios.post(url, body, { timeout });
+  console.log("[callGeminiTTS] ✓ Response received");
+  const parts =
+    resp?.data?.candidates?.[0]?.content?.parts?.filter(
+      (part) => part?.inlineData?.data
+    ) || [];
+  const audioPart = parts[0];
+  if (!audioPart?.inlineData?.data) {
+    console.error("[callGeminiTTS] Error - no audio data in response");
+  throw new Error("Gemini không trả về audio.");
+  }
+  return {
+    audioBuffer: Buffer.from(audioPart.inlineData.data, "base64"),
+    mimeType: audioPart.inlineData.mimeType || mimeType,
+    voice,
+    speakingRate: Number(speakingRate) || 1,
+  };
+}
 module.exports = {
   extractQuestions,
   solveQuestion,
   callGeminiJSON,
   generateCourseDraftJSON,
   chatWithGemini,
+  callGeminiTTS,
 };

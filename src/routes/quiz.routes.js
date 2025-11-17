@@ -29,6 +29,13 @@ router.delete(
 // Nộp bài
 router.post("/:id/submit", requireAuth, quizCtrl.submit);
 
+// Generate quizzes on-demand với AI (chỉ cần login, không cần role)
+router.post(
+  "/generate",
+  requireAuth,
+  quizCtrl.generateQuizzes
+);
+
 // Import AI từ PDF/Ảnh
 router.post(
   "/import",

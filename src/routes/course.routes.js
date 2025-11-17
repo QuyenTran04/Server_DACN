@@ -34,5 +34,10 @@ router.put(
   Course.updateCourse
 );
 router.get("/getCourseById/:id", middleware.requireAuth, Course.getCourseById);
+router.delete(
+  "/:id",
+  middleware.requireAuth,
+  Course.deleteCourse
+);
 
 module.exports = router;

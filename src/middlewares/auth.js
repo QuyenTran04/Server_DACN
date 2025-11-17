@@ -12,7 +12,9 @@ exports.requireAuth = async (req, res, next) => {
     if (!token) return res.status(401).json({ message: "Chưa đăng nhập" });
 
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    const user = await User.findById(decoded.id).select("_id role name email");
+    const userId = decoded.id || decoded.uid;
+    if (!userId) return res.status(401).json({ message: "Token không hợp lệ" });
+    const user = await User.findById(userId).select("_id role name email");
     if (!user) return res.status(401).json({ message: "Token không hợp lệ" });
 
     req.user = user;
@@ -25,8 +27,10 @@ exports.requireAuth = async (req, res, next) => {
 };
 
 exports.requireRole = (...roles) => {
+  const normalized = roles.map((r) => String(r).toLowerCase());
   return (req, res, next) => {
-    if (!req.user?.role || !roles.includes(req.user.role)) {
+    const userRole = String(req.user?.role || "").toLowerCase();
+    if (!userRole || !normalized.includes(userRole)) {
       return res.status(403).json({ message: "Không có quyền truy cập" });
     }
     next();
