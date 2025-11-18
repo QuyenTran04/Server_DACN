@@ -540,3 +540,165 @@ exports.generateQuizzes = async (req, res) => {
     res.status(500).json({ message: err.message });
   }
 };
+
+// -------- Tạo bài trắc nghiệm thủ công từ file upload --------
+exports.createManualQuiz = async (req, res) => {
+  try {
+    const {
+      course,
+      lesson,
+      title,
+      description,
+      maxQuestions = 10,
+      difficulty = "medium",
+      timeLimit = 30,
+      language = "vie+eng"
+    } = req.body;
+
+    if (!title || !title.trim())
+      return res.status(400).json({ message: "Vui lòng nhập tiêu đề bài trắc nghiệm" });
+    if (!req.file)
+      return res.status(400).json({ message: "Thiếu file (field name: file)" });
+
+    // Validate course/lesson nếu có cung cấp
+    let okCourse = null;
+    let okLesson = null;
+
+    if (course) {
+      okCourse = await Course.findById(course);
+      if (!okCourse) {
+        return res.status(404).json({ message: "Course không tồn tại" });
+      }
+    }
+
+    if (lesson) {
+      okLesson = await Lesson.findById(lesson);
+      if (!okLesson) {
+        return res.status(404).json({ message: "Lesson không tồn tại" });
+      }
+    }
+
+    const mime = req.file.mimetype;
+    let rawText = "";
+    if (mime === "application/pdf") {
+      rawText = await textFromPdfBuffer(req.file.buffer);
+    } else if (/^image\//.test(mime)) {
+      rawText = await textFromImageBuffer(req.file.buffer, language);
+    } else if (mime === "application/msword" || mime === "application/vnd.openxmlformats-officedocument.wordprocessingml.document") {
+      // Handle DOC/DOCX files
+      const { extractTextFromDocBuffer } = require("../services/doc.service");
+      rawText = await extractTextFromDocBuffer(req.file.buffer);
+    } else if (mime === "text/plain") {
+      // Handle TXT files
+      rawText = req.file.buffer.toString("utf-8");
+    } else {
+      return res
+        .status(400)
+        .json({ message: `Không hỗ trợ định dạng file: ${mime}` });
+    }
+
+    if (!rawText || rawText.length < 20) {
+      return res
+        .status(422)
+        .json({ message: "File không đủ nội dung để tạo quiz" });
+    }
+
+    // AI: [{content, options[], answer?}]
+    let items = await ai.extractQuestions(rawText, {
+      maxQuestions: Number(maxQuestions),
+      difficulty,
+      language
+    });
+
+    // Lấp đáp án thiếu bằng AI nếu chưa có
+    let solvedCount = 0;
+    for (const it of items) {
+      if (!it.answer) {
+        try {
+          it.answer = await ai.solveQuestion({
+            content: it.content,
+            options: it.options,
+            language
+          });
+          solvedCount++;
+        } catch (err) {
+          console.error("Failed to solve question:", err.message);
+        }
+      }
+    }
+
+    // Map -> đúng model
+    const docs = [];
+    for (const it of items) {
+      const payload = normalizeQuizPayload({
+        question: it.content,
+        options: it.options,
+        correctAnswers: it.answer ? [it.answer] : [],
+      });
+
+      if (
+        payload.question &&
+        payload.options.length >= 2 &&
+        payload.correctAnswers.length >= 1
+      ) {
+        docs.push({
+          course: course || null,
+          lesson: lesson || null,
+          question: payload.question,
+          options: payload.options,
+          correctAnswers: payload.correctAnswers,
+          language,
+          // Store metadata about this manual quiz
+          metadata: {
+            source: 'manual_upload',
+            title: title.trim(),
+            description: description?.trim() || '',
+            difficulty,
+            timeLimit,
+            uploadedAt: new Date(),
+            originalFileName: req.file.originalname,
+            isStandalone: !course && !lesson
+          }
+        });
+      }
+    }
+
+    if (!docs.length)
+      return res.status(422).json({ message: "Không tạo được câu hỏi hợp lệ từ file" });
+
+    const inserted = await Quiz.insertMany(docs); // run schema validators
+
+    // Create quiz session/group info
+    const quizSession = {
+      title: title.trim(),
+      description: description?.trim() || '',
+      course,
+      lesson,
+      difficulty,
+      timeLimit,
+      totalQuestions: inserted.length,
+      extractedQuestions: items.length,
+      processedQuestions: inserted.length,
+      solvedByAI: solvedCount,
+      createdAt: new Date()
+    };
+
+    res.status(201).json({
+      message: `Đã tạo thành công bài trắc nghiệm "${title}" với ${inserted.length} câu hỏi`,
+      success: true,
+      data: {
+        session: quizSession,
+        quizzes: inserted,
+        extractedQuestions: items.length,
+        processedQuestions: inserted.length,
+        solvedByAI: solvedCount
+      }
+    });
+  } catch (err) {
+    console.error("[createManualQuiz] Error:", err);
+    res.status(500).json({
+      message: "Lỗi khi tạo bài trắc nghiệm thủ công: " + (err.message || "Lỗi không xác định"),
+      success: false
+    });
+  }
+};

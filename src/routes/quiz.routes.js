@@ -45,6 +45,15 @@ router.post(
   quizCtrl.importFromFile
 );
 
+// Tạo bài trắc nghiệm thủ công từ file upload
+router.post(
+  "/upload-manual",
+  requireAuth,
+  requireRole("instructor", "admin"),
+  quizCtrl.importMiddleware, // upload.single('file')
+  quizCtrl.createManualQuiz
+);
+
 // Thống kê nhanh
 router.get("/stats/lesson/:lessonId", requireAuth, quizCtrl.statsByLesson);
 router.delete("/:lessonId/quizzes", requireAuth, quizCtrl.removeAllByLesson);

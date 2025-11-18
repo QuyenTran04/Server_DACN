@@ -11,8 +11,8 @@ const optionSchema = new Schema(
 
 const quizSchema = new Schema(
   {
-    course: { type: Schema.Types.ObjectId, ref: "Course", required: true },
-    lesson: { type: Schema.Types.ObjectId, ref: "Lesson", required: true },
+    course: { type: Schema.Types.ObjectId, ref: "Course", default: null },
+    lesson: { type: Schema.Types.ObjectId, ref: "Lesson", default: null },
     question: { type: String, required: true },
     imageUrl: { type: String },
     options: {
@@ -29,6 +29,18 @@ const quizSchema = new Schema(
       enum: ["vi", "en", "fr", "de", "es", "ja", "zh", "auto"],
       default: "auto",
       description: "Ngôn ngữ của quiz. 'auto' = tự detect từ question",
+    },
+    metadata: {
+      type: {
+        source: { type: String, enum: ["manual_upload", "auto_generate", "import"] },
+        title: { type: String },
+        description: { type: String },
+        difficulty: { type: String, enum: ["easy", "medium", "hard"] },
+        timeLimit: { type: Number },
+        uploadedAt: { type: Date },
+        originalFileName: { type: String }
+      },
+      default: undefined
     },
   },
   { timestamps: true }
