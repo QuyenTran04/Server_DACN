@@ -10,9 +10,9 @@ function isProgrammingCourse(courseTitle = "", lessonTitle = "") {
   return /lập\s*trình|programming|code|python|javascript|js|java|c\+\+|react|node|sql|database|api|backend|frontend|web|app|software/i.test(text);
 }
 
-const MIN_CONTENT_CHARS = 2500; // Tăng để tài liệu chi tiết hơn
+const MIN_CONTENT_CHARS = 4000; // Tăng để tài liệu chi tiết hơn
 const MAX_CONTEXT_CHARS = 3200;
-const MAX_DOC_ATTEMPTS = 2;
+const MAX_DOC_ATTEMPTS = 3;
 const DOC_SECTIONS = {
   vi: [
     "## Mục tiêu học tập",
@@ -39,21 +39,6 @@ function clampText(text = "", limit = MAX_CONTEXT_CHARS) {
   return `${clean.slice(0, limit)}...`;
 }
 
-function splitIntoBullets(text = "", language = "vi") {
-  const placeholder =
-    language === "vi"
-      ? "- Nội dung đang cập nhật từ bản thảo bài học."
-      : "- Content will be expanded from the lesson outline.";
-  const segments = text
-    .replace(/\r/g, "\n")
-    .split(/[\n\.]+/g)
-    .map((segment) => segment.trim())
-    .filter(Boolean)
-    .slice(0, 6);
-  return segments.length
-    ? segments.map((segment) => `- ${segment}`)
-    : [placeholder];
-}
 
 function sanitizeTags(rawTags = [], fallbackTerms = [], lessonTitle = "") {
   const normalized = Array.isArray(rawTags) ? rawTags : [];
@@ -73,7 +58,8 @@ function sanitizeTags(rawTags = [], fallbackTerms = [], lessonTitle = "") {
 function hasRequiredStructure(content = "") {
   if (!content) return false;
   const headingMatches = content.match(/(^|\n)##\s+/g) || [];
-  return headingMatches.length >= 4;
+  // Yêu cầu đầy đủ tất cả các section (ít nhất 5 section)
+  return headingMatches.length >= 5;
 }
 
 function coversKeyTerms(content = "", keyTerms = []) {
@@ -125,8 +111,9 @@ ${structureLines}
 
 Yêu cầu:
 - Mỗi mục có giải thích chi tiết, kết hợp ví dụ và ứng dụng thực tế
-- Nội dung tối thiểu 1200 ký tự, ưu tiên thông tin bám sát bài học
-- Thêm 3-4 bài tập ở phần "${sections[4].replace("## ", "" )}"
+- Nội dung TỐI THIỂU 3000 ký tự, ưu tiên thông tin bám sát bài học
+- Thêm 4-5 bài tập chi tiết ở phần "${sections[4].replace("## ", "" )}"
+- Mỗi section phải có nội dung phong phú, không ngắn gọn
 - Trả JSON duy nhất với các trường title, content, summary, tags.`.trim();
   const baseEn = `
 Course: ${courseTitle || "Untitled"}
@@ -142,8 +129,9 @@ ${structureLines}
 
 Requirements:
 - Each section must be detailed, include explanations, and reference real scenarios
-- Minimum 1200 characters, stay aligned with the lesson focus
-- In section "${sections[4].replace("## ", "" )}" add 3-4 practice tasks
+- MINIMUM 3000 characters, stay aligned with the lesson focus
+- In section "${sections[4].replace("## ", "" )}" add 4-5 detailed practice tasks
+- Every section should be comprehensive, not brief
 - Return a single JSON object with title, content, summary, tags.`.trim();
   return language === "vi" ? baseVi : baseEn;
 }
@@ -165,7 +153,7 @@ function normalizeDocumentPayload(rawDoc = {}, context) {
   content = content.replace(/^```[\w]*\n?/gm, "").replace(/\n?```$/gm, "").trim();
   
   // Only wrap in code block for programming courses
-  if (isProgrammingCourse(courseTitle, context.lessonTitle)) {
+  if (isProgrammingCourse(context.courseTitle, context.lessonTitle)) {
     content = autoWrapCode(content);
   }
   return {
@@ -193,14 +181,14 @@ function buildFallbackDocument(context) {
   const localized =
     context.language === "vi"
       ? {
-          intro: `- Hiểu rõ mục tiêu của bài "${context.lessonTitle}".\n- Nắm vững các khái niệm: ${keyTermText}.\n- Liên hệ với tình huống thực tế trong khóa "${context.courseTitle}".`,
-          process: `- Trình bày lại từng bước hoặc công thức chính liên quan tới ${keyTermText}.\n- Giải thích điều kiện áp dụng và lưu ý quan trọng.`,
-          examples: `- Ví dụ 1: Áp dụng ${context.lessonTitle} trong công việc thực tế.\n- Ví dụ 2: Kết hợp ${keyTermList[0] || context.lessonTitle} với công cụ khác.`,
-          practice: `1. Viết lại kiến thức bằng lời của bạn.\n2. Áp dụng ${context.lessonTitle} vào bài toán bạn đang theo đuổi.\n3. Tìm thêm một ví dụ trong lĩnh vực của bạn.`,
-          recap: `- Ôn lại các công thức/kiến thức cốt lõi.\n- Soạn ghi chú cá nhân cho bài tiếp theo.\n- Ghi lại câu hỏi cần giải đáp.` ,
+          intro: `## Mục tiêu học tập\n\nSau khi hoàn thành bài học này, bạn sẽ có thể:\n- Hiểu rõ bản chất và mục tiêu chính của "${context.lessonTitle}"\n- Nắm vững các khái niệm cốt lõi: ${keyTermText}\n- Vận dụng được kiến thức vào các tình huống thực tế trong ngành ${context.courseTitle}\n- Phân biệt được các trường hợp áp dụng và không áp dụng ${context.lessonTitle}\n- Xây dựng được tư duy phản biện về chủ đề này`,
+          process: `## Kiến thức cốt lõi\n\n### 1. Định nghĩa và bản chất\n${context.lessonTitle} là một phương pháp/kỹ thuật quan trọng trong lĩnh vực ${context.courseTitle}. Đây là cách tiếp cận giúp giải quyết các vấn đề liên quan đến ${keyTermText}.\n\n### 2. Các thành phần chính\n- Thành phần cơ bản thứ nhất liên quan đến ${keyTermList[0] || context.lessonTitle}\n- Thành phần cơ bản thứ hai bao gồm ${keyTermList[1] || 'các yếu tố phụ trợ'}\n- Thành phần cơ bản thứ ba là ${keyTermList[2] || 'công cụ thực thi'}\n\n### 3. Điều kiện áp dụng\n- Khi nào nên áp dụng: Khi cần giải quyết các vấn đề về ${keyTermText}\n- Khi nào không nên áp dụng: Trong các trường hợp đặc thù yêu cầu phương pháp khác\n- Các yếu tố cần chuẩn bị: Nguồn lực, kiến thức nền, công cụ hỗ trợ`,
+          examples: `## Quy trình / Công thức\n\n### Bước-by-step process\n1. **Giai đoạn chuẩn bị**: Phân tích bối cảnh và xác định mục tiêu\n2. **Giai đoạn thực thi**: Áp dụng ${context.lessonTitle} một cách có hệ thống\n3. **Giai đoạn đánh giá**: Đo lường hiệu quả và điều chỉnh nếu cần\n\n### Công thức chính\n\`${context.lessonTitle} = f(${keyTermList.join(', ')})\`\n\nTrong đó:\n- ${keyTermList[0] || 'Biến số 1'}: Đại diện cho yếu tố đầu vào\n- ${keyTermList[1] || 'Biến số 2'}: Đại diện cho yếu tố xử lý\n- ${keyTermList[2] || 'Biến số 3'}: Đại diện cho yếu tố đầu ra`,
+          practice: `## Ví dụ thực tiễn\n\n### Ví dụ 1: Áp dụng trong thực tế\n**Bối cảnh**: Một công ty trong ngành ${context.courseTitle} đối mặt với vấn đề...\n**Giải pháp**: Áp dụng ${context.lessonTitle} theo các bước:\n1. Phân tích vấn đề hiện tại\n2. Xác định các yếu tố ${keyTermText} liên quan\n3. Thiết kế giải pháp phù hợp\n4. Triển khai và theo dõi kết quả\n\n### Ví dụ 2: Case study thành công\n**Tình huống**: Doanh nghiệp X đã áp dụng thành công ${context.lessonTitle}\n**Kết quả**: Đạt được cải thiện 40% về hiệu suất\n**Bài học kinh nghiệm**: Các yếu tố then chốt tạo nên thành công`,
+          recap: `## Bài tập luyện tập\n\n### Bài tập 1: Kiến thức nền tảng\n1. Trình bày lại định nghĩa ${context.lessonTitle} bằng lời của bạn\n2. Liệt kê 5 lợi ích chính của việc áp dụng ${context.lessonTitle}\n3. So sánh ưu nhược điểm giữa các phương pháp khác nhau\n\n### Bài tập 2: Phân tích tình huống\n1. Tìm một ví dụ thực tế về việc áp dụng ${context.lessonTitle}\n2. Phân tích các yếu tố thành công và thất bại\n3. Đề xuất cải tiến cho tình huống đó\n\n### Bài tập 3: Thực hành có hướng dẫn\n1. Cho một tình huống cụ thể, hãy thiết kế quy trình áp dụng ${context.lessonTitle}\n2. Xác định các rủi ro tiềm ẩn và cách khắc phục\n3. Thiết lập các chỉ số đo lường hiệu quả\n\n### Bài tập 4: Case study cá nhân\n1. Áp dụng ${context.lessonTitle} vào vấn đề cá nhân của bạn\n2. Ghi lại quá trình và kết quả đạt được\n3. Rút ra bài học kinh nghiệm cho lần sau`,
           overview: context.condensedContent
-            ? `Bản thảo hiện có nhấn mạnh: ${context.condensedContent}`
-            : `Chưa có nội dung mẫu, hãy khai thác toàn bộ kiến thức quanh chủ đề "${context.lessonTitle}".`,
+            ? `## Ghi nhớ & tiếp tục học\n\n### Tóm tắt kiến thức chính\nBản thảo hiện có nhấn mạnh: ${context.condensedContent}\n\n### Các điểm cần nhớ\n- ${context.lessonTitle} là phương pháp hiệu quả cho ${keyTermText}\n- Cần tuân thủ đúng quy trình để đạt kết quả tối ưu\n- Luôn đánh giá và điều chỉnh theo thực tế\n\n### Hướng tiếp cận cho bài học sau\n- Tìm hiểu sâu hơn về các khía cạnh chuyên môn\n- Khám phá các công cụ và kỹ thuật liên quan\n- Thực hành qua các case study thực tế\n- Chuẩn bị cho các cấp độ nâng cao của ${context.courseTitle}`
+            : `## Ghi nhớ & tiếp tục học\n\n### Tóm tắt kiến thức chính\nChưa có nội dung mẫu, nhưng ${context.lessonTitle} là một chủ đề quan trọng trong ${context.courseTitle} liên quan đến ${keyTermText}.\n\n### Các điểm cần ghi nhớ\n- Nắm vững các khái niệm cơ bản về ${context.lessonTitle}\n- Hiểu rõ điều kiện áp dụng và giới hạn\n- Luôn có tư duy phản biện khi áp dụng vào thực tế\n\n### Định hướng học tập tiếp theo\n- Tìm hiểu sâu hơn về các kỹ thuật chuyên sâu\n- Khám phá các case study thành công và thất bại\n- Thực hành thường xuyên để thành thạo`,
         }
       : {
           intro: `- Understand what "${context.lessonTitle}" tries to achieve.\n- Master concepts such as ${keyTermText}.\n- Connect the lesson with real scenarios inside "${context.courseTitle}".`,
@@ -212,21 +200,14 @@ function buildFallbackDocument(context) {
             ? `The current outline highlights: ${context.condensedContent}`
             : `No outline was provided, so cover all relevant knowledge about "${context.lessonTitle}".`,
         };
-  const bulletSource =
-    context.lessonContent ||
-    context.courseDescription ||
-    `${context.lessonTitle} ${context.courseTitle}`;
-  const bulletContent = splitIntoBullets(bulletSource, context.language).join(
-    "\n"
-  );
-  const fallback = (
+    const fallback = (
     [
       `# ${context.lessonTitle}`,
       `${sections[0]}\n${localized.intro}`,
-      `${sections[1]}\n${localized.overview}\n\n${bulletContent}`,
-      `${sections[2]}\n${localized.process}`,
-      `${sections[3]}\n${localized.examples}`,
-      `${sections[4]}\n${localized.practice}`,
+      `${sections[1]}\n${localized.process}`,
+      `${sections[2]}\n${localized.examples}`,
+      `${sections[3]}\n${localized.practice}`,
+      `${sections[4]}\n${localized.overview}`,
       `${sections[5]}\n${localized.recap}`,
     ].join("\n\n")
   );
