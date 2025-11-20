@@ -10,7 +10,7 @@ function isProgrammingCourse(courseTitle = "", lessonTitle = "") {
   return /lập\s*trình|programming|code|python|javascript|js|java|c\+\+|react|node|sql|database|api|backend|frontend|web|app|software/i.test(text);
 }
 
-const MIN_CONTENT_CHARS = 4000; // Tăng để tài liệu chi tiết hơn
+const MIN_CONTENT_CHARS = 3000; // Giảm nhẹ để ít nghiêm ngặt hơn nhưng vẫn đủ chi tiết
 const MAX_CONTEXT_CHARS = 3200;
 const MAX_DOC_ATTEMPTS = 3;
 const DOC_SECTIONS = {
@@ -58,8 +58,8 @@ function sanitizeTags(rawTags = [], fallbackTerms = [], lessonTitle = "") {
 function hasRequiredStructure(content = "") {
   if (!content) return false;
   const headingMatches = content.match(/(^|\n)##\s+/g) || [];
-  // Yêu cầu đầy đủ tất cả các section (ít nhất 5 section)
-  return headingMatches.length >= 5;
+  // Giảm yêu cầu xuống 3 sections để ít nghiêm ngặt hơn
+  return headingMatches.length >= 3;
 }
 
 function coversKeyTerms(content = "", keyTerms = []) {
@@ -111,8 +111,8 @@ ${structureLines}
 
 Yêu cầu:
 - Mỗi mục có giải thích chi tiết, kết hợp ví dụ và ứng dụng thực tế
-- Nội dung TỐI THIỂU 3000 ký tự, ưu tiên thông tin bám sát bài học
-- Thêm 4-5 bài tập chi tiết ở phần "${sections[4].replace("## ", "" )}"
+- Nội dung TỐI THIỂU 2500 ký tự, ưu tiên thông tin bám sát bài học
+- Thêm 3-4 bài tập chi tiết ở phần "${sections[4].replace("## ", "" )}"
 - Mỗi section phải có nội dung phong phú, không ngắn gọn
 - Trả JSON duy nhất với các trường title, content, summary, tags.`.trim();
   const baseEn = `
@@ -129,8 +129,8 @@ ${structureLines}
 
 Requirements:
 - Each section must be detailed, include explanations, and reference real scenarios
-- MINIMUM 3000 characters, stay aligned with the lesson focus
-- In section "${sections[4].replace("## ", "" )}" add 4-5 detailed practice tasks
+- MINIMUM 2500 characters, stay aligned with the lesson focus
+- In section "${sections[4].replace("## ", "" )}" add 3-4 detailed practice tasks
 - Every section should be comprehensive, not brief
 - Return a single JSON object with title, content, summary, tags.`.trim();
   return language === "vi" ? baseVi : baseEn;

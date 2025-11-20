@@ -3,7 +3,7 @@ const {
   extractKeyVocabulary,
 } = require("../utils/dynamicPrompt.helper");
 
-const MIN_CONTENT_CHARS = 2500; // Đảm bảo tài liệu đầy đủ chi tiết
+const MIN_CONTENT_CHARS = 3000; // Đảm bảo tài liệu đầy đủ chi tiết nhưng ít nghiêm ngặt hơn
 
 async function generateDetailedLessonDocument({
   lessonTitle = "",
@@ -33,24 +33,26 @@ Tạo tài liệu học tập HOÀN CHỈNH, CHI TIẾT, TOÀN DIỆN và THỰC
 - Mỗi khái niệm phải giải thích "tại sao" không chỉ "là gì"
 
 TIÊU CHUAN CHẤT LƯỢNG:
-1. Nội dung tối thiểu 2000 ký tự, ưu tiên chất lượng
+1. Nội dung TỐI THIỂU 3000 ký tự, ưu tiên chất lượng và chi tiết
 2. Cấu trúc logic, dễ theo dõi, phù hợp cho tự học
 3. Giải thích kỹ từng khái niệm, tránh dùng thuật ngữ chưa được giải thích
-4. Bao gồm ít nhất 4-5 ví dụ thực tế, cụ thể, dễ hiểu
+4. Bao gồm ít nhất 4-5 ví dụ thực tế, cụ thể, có số liệu, dễ hiểu
 5. Cung cấp công thức, quy trình, bước thực hiện rõ ràng với hình minh họa (nếu cần)
-6. Có 4-5 bài tập luyện tập từ cơ bản đến nâng cao, kèm gợi ý hoặc hướng dẫn
+6. Có 4-5 bài tập luyện tập từ cơ bản đến nâng cao, kèm gợi ý hoặc hướng dẫn chi tiết
+7. Mỗi section phải có nội dung phong phú, không ngắn gọn
 
 Trả về JSON hợp lệ với các trường: title, content, summary, tags.`
         : `You are an expert educator at the ${level} level.
 Create COMPREHENSIVE, DETAILED, and PRACTICAL lesson documents.
 
 Requirements:
-1. Minimum 2000 characters, prioritize quality over length
+1. MINIMUM 3000 characters, prioritize quality and detail over length
 2. Logical structure, easy to follow
 3. Clear explanations of each concept
-4. At least 3-4 real-world examples
+4. At least 4-5 real-world examples with specific data
 5. Include formulas / processes / step-by-step procedures
-6. Provide practice exercises with guidance
+6. Provide 4-5 practice exercises with detailed guidance
+7. Every section must be comprehensive, not brief
 
 Return valid JSON with fields: title, content, summary, tags.`;
 
@@ -83,10 +85,11 @@ CẤU TRÚC BẮT BUỘC:
 - Tổng hợp ý chính dưới dạng danh sách dễ nhớ
 
 ### 3. Chi tiết & Giải thích chuyên sâu
-- Mở rộng từng khái niệm từ phần 2
-- Giải thích "tại sao" không chỉ "là gì"
-- Đề cập đến các trường hợp đặc biệt, ngoại lệ
-- Liên hệ lý thuyết với thực tiễn
+- Mở rộng chi tiết từng khái niệm từ phần 2
+- Giải thích "tại sao" không chỉ "là gì" với ví dụ minh họa
+- Đề cập đến các trường hợp đặc biệt, ngoại lệ, và cách xử lý
+- Liên hệ lý thuyết với thực tiễn qua case study cụ thể
+- Phân tích ưu nhược điểm của mỗi phương pháp/cách tiếp cận
 
 ### 4. Quy trình / Công thức / Bước thực hiện
 - Trình bày từng bước cụ thể
@@ -95,26 +98,30 @@ CẤU TRÚC BẮT BUỘC:
 - Giải thích mỗi bước và ý nghĩa
 
 ### 5. Ví dụ thực tiễn & Case Studies
-- Cung cấp ít nhất 3 ví dụ thực tế, cụ thể
+- Cung cấp ít nhất 5-6 ví dụ thực tế, cụ thể, có số liệu
 - Các ví dụ nên từ đơn giản đến phức tạp
-- Bao gồm cả tình huống thành công và thất bại
-- Giải thích cách áp dụng vào công việc thực tế
+- Bao gồm cả tình huống thành công và thất bại với phân tích
+- Giải thích chi tiết cách áp dụng vào công việc thực tế
+- Mỗi ví dụ phải có bài học kinh nghiệm rõ ràng
 
 ### 6. Bài tập luyện tập & Thử thách
-- Tạo 4-5 bài tập từ cơ bản đến nâng cao
-- Kèm theo gợi ý hoặc hướng dẫn giải
-- Bao gồm cả câu hỏi lý thuyết và bài tập thực hành
+- Tạo 5-6 bài tập từ cơ bản đến nâng cao
+- Kèm theo gợi ý hoặc hướng dẫn giải chi tiết
+- Bao gồm cả câu hỏi lý thuyết và bài tập thực hành có ví dụ cụ thể
+- Mỗi bài tập phải có mục đích học tập rõ ràng
 
 ### 7. Ghi nhớ & Tiếp tục học
 - Tóm tắt các điểm chính
 - Gợi ý các bài học liên quan hoặc nâng cao
 - Danh sách tài liệu tham khảo thêm
 
-Lưu ý:
+Lưu ý QUAN TRỌNG:
 - Viết bằng tiếng Việt, rõ ràng và dễ hiểu
-- Sử dụng markdown để định dạng
+- Sử dụng markdown để định dạng chuyên nghiệp
 - Không sử dụng quá nhiều kỹ thuật, nếu cần thì giải thích kỹ
-- Tối ưu cho học viên tự học`
+- Tối ưu cho học viên tự học - tài liệu phải ĐỦ ĐẦY để không cần tham khảo thêm
+- Mỗi section phải có nội dung phong phú, không viết ngắn gọn
+- TỔNG ĐỘ DÀI TÀI LIỆU PHẢI >= 3000 ký tự`
         : `COURSE: ${courseTitle}
 DESCRIPTION: ${courseDescription}
 LEVEL: ${level}
@@ -204,12 +211,13 @@ Tài liệu hiện tại (chỉ ${result.content?.length} ký tự - QUÁ NGẮN
 ${result.content}
 
 BẮT BUỘC PHẢI LÀM:
-1. ⭐ MỞ RỘNG nội dung thêm 3-5 lần (từ ${result.content?.length} lên >=2500 ký tự)
-2. ⭐ THÊM 5+ ví dụ thực tế CỤ THỂ, CÓ SỐ LIỆU
+1. ⭐ MỞ RỘNG nội dung thêm 2-3 lần (từ ${result.content?.length} lên >=3000 ký tự)
+2. ⭐ THÊM 5+ ví dụ thực tế CỤ THỂ, CÓ SỐ LIỆU, CÓ PHÂN TÍCH
 3. ⭐ THÊM công thức, quy trình từng bước chi tiết (nếu là kỹ thuật)
-4. ⭐ THÊM 5+ bài tập luyện tập với ĐÁP ÁN HƯỚNG DẪN
+4. ⭐ THÊM 5+ bài tập luyện tập với ĐÁP ÁN HƯỚNG DẪN chi tiết
 5. ⭐ GIẢI THÍCH "TẠI SAO" không chỉ "LÀ GÌ" cho mỗi khái niệm
-6. ⭐ TỔNG CỘNG phải >=2500 ký tự, không được ít hơn
+6. ⭐ TỔNG CỘNG phải >=3000 ký tự, không được ít hơn
+7. ⭐ MỖI SECTION phải có nội dung phong phú, không ngắn gọn
 
 Bài học: "${lessonTitle}"
 Khóa học: "${courseTitle}"
@@ -226,11 +234,12 @@ HÀNH ĐỘNG: Viết lại TOÀN BỘ tài liệu sao cho:
 ${result.content}
 
 TAKE ACTION NOW:
-1. EXPAND content at least double
-2. ADD detailed examples, formulas, step-by-step procedures
-3. ADD specific practice exercises with solution guidance
-4. THOROUGHLY EXPLAIN each concept
-5. TOTAL must be 2500+ characters
+1. EXPAND content at least 2-3 times
+2. ADD detailed examples with specific data, formulas, step-by-step procedures
+3. ADD 5+ specific practice exercises with detailed solution guidance
+4. THOROUGHLY EXPLAIN each concept with "why" not just "what"
+5. TOTAL must be 3000+ characters
+6. Every section must be comprehensive, not brief
 
 Lesson: ${lessonTitle}
 Course: ${courseTitle}
