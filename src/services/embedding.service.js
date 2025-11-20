@@ -2,7 +2,7 @@ const axios = require("axios");
 
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 const RAW_MODEL = process.env.GEMINI_EMBED_MODEL || "gemini-embedding-001"; // nên dùng model này
-const OUTPUT_DIM = parseInt(process.env.GEMINI_EMBED_DIM || "768", 10); // đặt 768/1536/3072
+const OUTPUT_DIM = parseInt(process.env.GEMINI_EMBED_DIM || "3072", 10); // đặt 768/1536/3072
 
 // Luôn có tiền tố "models/"
 const MODEL_ID = RAW_MODEL.startsWith("models/")

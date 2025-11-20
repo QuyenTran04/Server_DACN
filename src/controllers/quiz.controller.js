@@ -112,7 +112,7 @@ exports.remove = async (req, res) => {
   try {
     const deleted = await Quiz.findByIdAndDelete(req.params.id);
     if (!deleted) return res.status(404).json({ message: "Không tìm thấy" });
-    res.json({ message: "Đã xoá" });
+    res.json({ message: "Đã xóa" });
   } catch (err) {
     res.status(500).json({ message: err.message });
   }

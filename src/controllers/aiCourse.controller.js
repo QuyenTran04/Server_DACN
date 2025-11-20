@@ -213,14 +213,14 @@ exports.generateCourseDraft = async (req, res) => {
     if (!prompt)
       return res
         .status(400)
-        .json({ message: "Thiáº¿u prompt (chá»§ Ä‘á»/má»¥c tiÃªu khÃ³a há»c)." });
+        .json({ message: "Thiếu prompt (chủ đề/mục tiêu khóa học)." });
     // Fetch existing categories
     const existingCategories = await Category.find().select("name").lean();
     const categoryList = existingCategories.map((c) => c.name);
     const categoryOptions =
       categoryList.length > 0
         ? categoryList.join(", ")
-        : "Láº­p TrÃ¬nh, Thiáº¿t Káº¿, Kinh Doanh, Ngoáº¡i Ngá»¯, KhÃ¡c";
+        : "Lập Trình, Thiết Kế, Kinh Doanh, Ngoại Ngữ, Khác";
     const vocabularyNote = isVocab ? '\nLƯU Ý: ĐÂY LÀ KHÓA HỌC TỪ VỰNG. Mỗi câu hỏi quiz PHẢI tập trung kiểm tra từ vựng (định nghĩa, ứng dụng, ví dụ sử dụng). Ưu tiên tạo câu hỏi về từ khóa chính từ nội dung bài học.' : '';
     const systemPrompt = `
 Bạn là trợ lý xây dựng khóa học cho LMS. LUÔN viết bằng TIẾNG VIỆT.${vocabularyNote} Bắt buộc trả JSON theo schema:
@@ -277,7 +277,7 @@ Mục tiêu: xây lộ trình học hợp lý, bao quát kiến thức cần thi
       system: systemPrompt,
       user: userPrompt,
       schema,
-      seedObject: { categoryName: "KhÃ¡c", imagePrompt: "", lessons: [], quizzes: [] },
+      seedObject: { categoryName: "Khác", imagePrompt: "", lessons: [], quizzes: [] },
     });
     const lessons = ensureLessons(draftRaw.lessons || []);
     // Remove code block wrappers from lesson content
@@ -314,9 +314,9 @@ Mục tiêu: xây lộ trình học hợp lý, bao quát kiến thức cần thi
       console.error("Invalid draft structure:", draftRaw);
       return res
         .status(400)
-        .json({ message: "AI tráº£ dá»¯ liá»‡u chÆ°a Ä‘á»§ trÆ°á»ng tá»‘i thiá»ƒu." });
+        .json({ message: "AI trả về dữ liệu chưa đủ trường tối thiểu." });
     }
-    // Chuáº©n hoÃ¡ quizzes
+    // Chuẩn hóa quizzes
     let quizzes = [];
     if (includeQuizzes) {
       const quizBuckets = new Map();
@@ -341,7 +341,7 @@ Mục tiêu: xây lộ trình học hợp lý, bao quát kiến thức cần thi
     const result = {
       title: String(draftRaw.title).trim(),
       description: String(draftRaw.description).trim(),
-      categoryName: String(draftRaw.categoryName || "KhÃ¡c").trim(),
+      categoryName: String(draftRaw.categoryName || "Khác").trim(),
       imagePrompt: String(draftRaw.imagePrompt || "").trim(),
       lessons: boundedLessons,
       quizzes,
@@ -476,13 +476,22 @@ exports.createCourseFromDraft = async (req, res) => {
       const firstLesson = lessonDocs[0];
       const firstOriginalLesson = draft.lessons[0];
       try {
-        const docData = await generateDetailedLessonDocument({
+        console.log(`[createCourseFromDraft]  Tạo document bài 1: "${firstOriginalLesson.title}"`);
+
+        // Add timeout 180s để tránh hang
+        const docPromise = generateDetailedLessonDocument({
           lessonTitle: firstOriginalLesson.title,
           lessonContent: firstOriginalLesson.content || "",
           courseTitle: draft.title,
           courseDescription: draft.description,
           level: draft.level || "Beginner",
         });
+
+        const timeoutPromise = new Promise((_, reject) =>
+          setTimeout(() => reject(new Error("Document generation timeout (180s)")), 180000)
+        );
+
+        const docData = await Promise.race([docPromise, timeoutPromise]);
 
         await Document.create({
           lesson: firstLesson._id,
@@ -601,7 +610,7 @@ exports.startCourseCreation = async (req, res) => {
     // ⏭️ SKIP: Quiz creation moved to on-demand endpoint
     // Users will create quizzes from lesson page when needed
 
-    // 🎯 TẠO DOCUMENT BÀI 1 NGAY (với timeout 60s)
+    // 🎯 TẠO DOCUMENT BÀI 1 NGAY (với timeout 180s)
     let firstLessonReady = false;
     if (lessonDocs.length > 0) {
       const firstLesson = lessonDocs[0];
@@ -610,7 +619,7 @@ exports.startCourseCreation = async (req, res) => {
       try {
         console.log(`[startCourseCreation] 🔄 Tạo document bài 1: "${firstOriginalLesson.title}"`);
         
-        // Add timeout 60 giây để tránh hang
+        // Add timeout 180 giây để đảm bảo AI đủ thời gian tạo tài liệu chi tiết
         const docPromise = generateDetailedLessonDocument({
           lessonTitle: firstOriginalLesson.title,
           lessonContent: firstOriginalLesson.content || "",
@@ -620,7 +629,7 @@ exports.startCourseCreation = async (req, res) => {
         });
 
         const timeoutPromise = new Promise((_, reject) =>
-          setTimeout(() => reject(new Error("Document generation timeout (60s)")), 60000)
+          setTimeout(() => reject(new Error("Document generation timeout (180s)")), 180000)
         );
 
         const docData = await Promise.race([docPromise, timeoutPromise]);
@@ -774,7 +783,7 @@ exports.streamCourseCreation = async (req, res) => {
         try {
           console.log(`[streamCourseCreation] Tạo document bài ${i + 1}...`);
 
-          // Add timeout 120s cho stream (bài 2+ có expansion logic)
+          // Add timeout 240s cho stream (bài 2+ cần nhiều thời gian hơn cho expansion)
           const docPromise = generateDetailedLessonDocument({
             lessonTitle: lesson.title,
             lessonContent: lesson.content || "",
@@ -784,7 +793,7 @@ exports.streamCourseCreation = async (req, res) => {
           });
 
           const timeoutPromise = new Promise((_, reject) =>
-            setTimeout(() => reject(new Error(`Document generation timeout for lesson ${i + 1}`)), 120000)
+            setTimeout(() => reject(new Error(`Document generation timeout for lesson ${i + 1}`)), 240000)
           );
 
           const docData = await Promise.race([docPromise, timeoutPromise]);
@@ -1008,13 +1017,22 @@ exports.createCourseFromDraftWithStream = async (req, res) => {
         const firstLesson = lessonDocs[0];
         const firstOriginalLesson = draft.lessons[0];
         try {
-          const docData = await generateDetailedLessonDocument({
+          console.log(`[SSE] 🔄 Tạo document bài 1: "${firstOriginalLesson.title}"`);
+
+          // Add timeout 180s cho SSE stream
+          const docPromise = generateDetailedLessonDocument({
             lessonTitle: firstOriginalLesson.title,
             lessonContent: firstOriginalLesson.content || "",
             courseTitle: draft.title,
             courseDescription: draft.description,
             level: draft.level || "Beginner",
           });
+
+          const timeoutPromise = new Promise((_, reject) =>
+            setTimeout(() => reject(new Error("Document generation timeout (180s)")), 180000)
+          );
+
+          const docData = await Promise.race([docPromise, timeoutPromise]);
 
           await Document.create({
             lesson: firstLesson._id,
@@ -1057,13 +1075,22 @@ exports.createCourseFromDraftWithStream = async (req, res) => {
             const originalLesson = draft.lessons[i];
 
             try {
-              const docData = await generateDetailedLessonDocument({
+              console.log(`[SSE] 🔄 Tạo document bài ${i + 1}: "${originalLesson.title}"`);
+
+              // Add timeout 240s cho các bài tiếp theo
+              const docPromise = generateDetailedLessonDocument({
                 lessonTitle: originalLesson.title,
                 lessonContent: originalLesson.content || "",
                 courseTitle: draft.title,
                 courseDescription: draft.description,
                 level: draft.level || "Beginner",
               });
+
+              const timeoutPromise = new Promise((_, reject) =>
+                setTimeout(() => reject(new Error(`Document generation timeout for lesson ${i + 1}`)), 240000)
+              );
+
+              const docData = await Promise.race([docPromise, timeoutPromise]);
 
               await Document.create({
                 lesson: lesson._id,
