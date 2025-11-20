@@ -5,7 +5,7 @@ const chunkSchema = new Schema(
   {
     source: {
       type: String,
-      enum: ["lesson", "course", "quiz"],
+      enum: ["lesson", "course", "quiz", "document"],
       required: true,
     },
     sourceId: { type: Schema.Types.ObjectId, required: true, index: true },

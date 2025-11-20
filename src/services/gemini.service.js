@@ -5,7 +5,7 @@ const MODEL = process.env.GEMINI_MODEL || "gemini-2.0-flash";
 const TTS_MODEL =
   process.env.GEMINI_TTS_MODEL || "gemini-2.5-flash-preview-tts";
 const DEFAULT_TTS_VOICE = process.env.GEMINI_TTS_VOICE || "Puck";
-const MAX_TOKENS = Number(process.env.GEMINI_MAX_TOKENS || 2048);
+const MAX_TOKENS = Number(process.env.GEMINI_MAX_TOKENS || 8192);
 const TEMPERATURE = Number(process.env.GEMINI_TEMPERATURE || 0.4);
 function ensureKey() {
   if (!process.env.GEMINI_API_KEY) {

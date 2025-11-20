@@ -36,7 +36,7 @@ async function callLLMJSON({
       systemPrompt,
       userPrompt: fullUserPrompt,
       temperature: 0.3,
-      maxOutputTokens: 25000,
+      maxOutputTokens: 8192,
     });
 
     // Merge với seed object để ensure required fields tồn tại
