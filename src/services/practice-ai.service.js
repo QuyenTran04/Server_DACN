@@ -126,6 +126,13 @@ Yêu cầu:
 - Độ khó: ${difficulty}
 - Loại câu hỏi: ${questionType === "open_ended" ? "Tự luận" : "Trắc nghiệm"}
 - Tiêu đề gợi ý: ${title}
+
+Hãy tạo câu hỏi với định dạng **Markdown**:
+- Sử dụng **in đậm** để nhấn mạnh các yêu cầu quan trọng
+- Sử dụng số thứ tự (1., 2., 3.) hoặc bullet points (•) cho các câu hỏi nhiều phần
+- Sử dụng \`italics\` cho thuật ngữ hoặc từ khóa quan trọng
+- Sử dụng blockquote cho các ví dụ minh họa (nếu cần)
+- Đảm bảo câu hỏi rõ ràng, có cấu trúc logic
 `;
 
     const aiResult = await callGeminiJSON({
@@ -177,6 +184,13 @@ Nội dung bài học tham khảo:
 ${lessonContent}
 
 Độ khó: ${difficulty}
+
+Hãy trả lời đánh giá với định dạng **Markdown**:
+- Sử dụng **in đậm** cho các điểm chính
+- Sử dụng *in nghiêng* để nhấn mạnh
+- Sử dụng danh sách (bullet points) để liệt kê các điểm
+- Sử dụng \\\`code\\\` cho thuật ngữ quan trọng
+- Sử dụng blockquote để trích dẫn hay ví dụ minh họa
 `;
 
     const aiResult = await callGeminiJSON({
