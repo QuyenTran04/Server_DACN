@@ -193,6 +193,89 @@ exports.generateExtraQuizItems = async function generateExtraQuizItems({ lessonT
     return buildFallbackQuizItems(lessonTitle, lessonContent).slice(0, needed);
   }
 }
+// Function to analyze assessment and determine level
+function analyzeAssessmentLevel(assessment = {}) {
+  if (!assessment || !assessment.answers) {
+    return "Beginner";
+  }
+
+  const { answers, category, topic } = assessment;
+  let score = 0;
+  let totalQuestions = 0;
+
+  // Universal questions that apply to all topics
+  if (answers.current_level !== undefined) {
+    // This is a scale from 0-5 directly representing level
+    score += answers.current_level;
+    totalQuestions++;
+  }
+
+  if (answers.practical_experience !== undefined) {
+    // Scale from 0-4, convert to 0-5 scale
+    score += (answers.practical_experience / 4) * 5;
+    totalQuestions++;
+  }
+
+  // Category-specific scoring
+  if (category === 'programming') {
+    // Programming basics (0-4)
+    if (answers.programming_basics !== undefined) {
+      score += (answers.programming_basics / 4) * 5;
+      totalQuestions++;
+    }
+    // Project experience (0-4)
+    if (answers.project_experience !== undefined) {
+      score += (answers.project_experience / 4) * 5;
+      totalQuestions++;
+    }
+  } else if (category === 'design') {
+    // Design tools (0-4)
+    if (answers.design_tools !== undefined) {
+      score += (answers.design_tools / 4) * 5;
+      totalQuestions++;
+    }
+    // Design principles (0-4)
+    if (answers.design_principles !== undefined) {
+      score += (answers.design_principles / 4) * 5;
+      totalQuestions++;
+    }
+  } else if (category === 'business') {
+    // Business knowledge (0-4)
+    if (answers.business_knowledge !== undefined) {
+      score += (answers.business_knowledge / 4) * 5;
+      totalQuestions++;
+    }
+    // Management experience (0-4)
+    if (answers.management_experience !== undefined) {
+      score += (answers.management_experience / 4) * 5;
+      totalQuestions++;
+    }
+  }
+
+  // Language learning specific
+  if (answers.language_level !== undefined) {
+    score += (answers.language_level / 4) * 5;
+    totalQuestions++;
+  }
+
+  // Data analysis specific
+  if (answers.technical_skills !== undefined) {
+    score += (answers.technical_skills / 4) * 5;
+    totalQuestions++;
+  }
+
+  // Calculate average score (0-5 scale)
+  const averageScore = totalQuestions > 0 ? score / totalQuestions : 0;
+
+  console.log(`[analyzeAssessmentLevel] Topic: ${topic}, Category: ${category}, Score: ${averageScore.toFixed(2)}/${totalQuestions} questions`);
+
+  // Map score to level with more granular thresholds
+  if (averageScore >= 4.2) return "Advanced";
+  if (averageScore >= 3.0) return "Intermediate";
+  if (averageScore >= 1.5) return "Beginner";
+  return "Beginner";
+}
+
 // POST /api/ai/courses/draft
 exports.generateCourseDraft = async (req, res) => {
   try {
@@ -200,14 +283,19 @@ exports.generateCourseDraft = async (req, res) => {
     const {
       prompt,
       targetAudience,
-      level = "Beginner",
+      assessment,
     } = req.body || {};
     const includeQuizzes = true;
     const isVocab = isVocabularyCourse(prompt);
+
+    // Analyze assessment to determine level
+    const assessedLevel = analyzeAssessmentLevel(assessment);
+
     console.log(`[generateCourseDraft] Input:`, {
       prompt,
       targetAudience,
-      level,
+      assessedLevel,
+      assessment: assessment ? { category: assessment.category, answersCount: Object.keys(assessment.answers || {}).length } : null,
       isVocab,
     });
     if (!prompt)
@@ -250,11 +338,76 @@ ${includeQuizzes ? `Sinh số lượng câu hỏi phù hợp VỚI NỘI DUNG m�
 Mô tả rõ mục tiêu, nội dung và gợi ý tài liệu cho từng bài để hệ thống có thể sinh tài liệu bổ sung đầy đủ.
 Tự động quyết định số lượng bài học để bao phủ kiến thức (tối thiểu ${AUTO_LESSON_MIN}, tối đa ${AUTO_LESSON_MAX}).
     `.trim();
+    // Create enhanced prompt with assessment insights
+    let assessmentInsights = "";
+    if (assessment && assessment.answers) {
+      const insights = [];
+
+      // Universal insights from dynamic questions
+      if (assessment.answers.current_level >= 4) {
+        insights.push("đã có kiến thức nền tảng vững chắc");
+      } else if (assessment.answers.current_level <= 1) {
+        insights.push("mới bắt đầu học từ đầu");
+      }
+
+      if (assessment.answers.practical_experience >= 3) {
+        insights.push("có kinh nghiệm thực tế phong phú");
+      } else if (assessment.answers.practical_experience <= 1) {
+        insights.push("cần nhiều thực hành hơn");
+      }
+
+      // Category-specific insights from dynamic questions
+      if (assessment.category === 'programming') {
+        if (assessment.answers.programming_basics >= 3) insights.push("hiểu sâu về lập trình");
+        if (assessment.answers.project_experience >= 3) insights.push("đã làm nhiều dự án");
+        if (assessment.answers.project_experience === 0) insights.push("chưa có kinh nghiệm dự án");
+      } else if (assessment.category === 'design') {
+        if (assessment.answers.design_tools >= 3) insights.push("thành thạo công cụ thiết kế");
+        if (assessment.answers.design_principles >= 3) insights.push("hiểu sâu về nguyên tắc thiết kế");
+        if (assessment.answers.design_tools === 0) insights.push("cần học các công cụ thiết kế");
+      } else if (assessment.category === 'business') {
+        if (assessment.answers.business_knowledge >= 3) insights.push("có kiến thức kinh doanh tốt");
+        if (assessment.answers.management_experience >= 3) insights.push("có kinh nghiệm quản lý");
+      }
+
+      // Language learning specific
+      if (assessment.answers.language_level >= 3) {
+        insights.push("sẵn sàng cho nội dung nâng cao");
+      } else if (assessment.answers.language_level <= 1) {
+        insights.push("cần bắt đầu từ những điều cơ bản nhất");
+      }
+
+      // Data analysis specific
+      if (assessment.answers.technical_skills >= 3) {
+        insights.push("có kỹ năng kỹ thuật tốt");
+      } else if (assessment.answers.technical_skills <= 1) {
+        insights.push("cần xây dựng nền tảng kỹ thuật");
+      }
+
+      // Add goals-based insights if available
+      if (assessment.answers.goals) {
+        const goalsText = String(assessment.answers.goals).toLowerCase();
+        if (goalsText.includes('việc') || goalsText.includes('job') || goalsText.includes('career')) {
+          insights.push("hướng đến ứng dụng thực tế cho công việc");
+        } else if (goalsText.includes('dự án') || goalsText.includes('project')) {
+          insights.push("tập trung vào kỹ năng làm dự án");
+        } else if (goalsText.includes('chuyên sâu') || goalsText.includes('expert')) {
+          insights.push("muốn học ở mức độ chuyên sâu");
+        }
+      }
+
+      if (insights.length > 0) {
+        assessmentInsights = `
+Phân tích khảo sát cho thấy người học ${insights.join(", ")}. Khóa học cần được điều chỉnh cho phù hợp với trình độ và mục tiêu thực tế này.`;
+      }
+    }
+
     const userPrompt = `
 Chủ đề: ${prompt}
 Đối tượng: ${targetAudience || "người mới bắt đầu"}
-Cấp độ: ${level}
-Mục tiêu: xây lộ trình học hợp lý, bao quát kiến thức cần thiết mà không bỏ sót ý chính.
+Cấp độ: ${assessedLevel} (được xác định dựa trên khảo sát trình độ)
+${assessmentInsights}
+Mục tiêu: xây lộ trình học hợp lý, bao quát kiến thức cần thiết mà không bỏ sót ý chính, phù hợp với trình độ thực tế của người học.
     `.trim();
     // Use schema-guided JSON call for reliability
     const schema = {
@@ -345,6 +498,8 @@ Mục tiêu: xây lộ trình học hợp lý, bao quát kiến thức cần thi
       imagePrompt: String(draftRaw.imagePrompt || "").trim(),
       lessons: boundedLessons,
       quizzes,
+      assessedLevel, // Add the assessed level based on survey
+      assessmentInsights: assessmentInsights.trim(), // Include the insights generated
     };
     console.log(`[generateCourseDraft] âœ“ Success`);
     return res.json(result);
