@@ -12,9 +12,9 @@ function normalizeQuestionResponse(aiResult, { title }) {
           title,
           question: data.trim(),
           expectedAnswer: "",
-          hints: ["Hay suy nghi ve noi dung bai hoc va tra loi ngan gon"],
+          hints: ["Hãy suy nghĩ về nội dung bài học và trả lời ngắn gọn"],
           tags: ["practice", "review"],
-          explanation: "Cau hoi luyen tap do AI tao tu noi dung bai hoc",
+          explanation: "Câu hỏi luyện tập do AI tạo từ nội dung bài học",
         };
       }
     }
@@ -39,9 +39,9 @@ function normalizeQuestionResponse(aiResult, { title }) {
 
   return {
     title,
-    question: "Hay tom tat noi dung chinh cua bai hoc va chu y cac diem chinh.",
+    question: "Hãy tóm tắt nội dung chính của bài học và chú ý các điểm chính.",
     expectedAnswer: "",
-    hints: ["Doc ky noi dung va trich xuat y chinh"],
+    hints: ["Đọc kỹ nội dung và trích xuất ý chính"],
     tags: ["practice"],
     explanation: "",
   };
@@ -58,7 +58,7 @@ function normalizeEvaluation(aiResult) {
         return {
           score: 6,
           feedback: String(data).trim(),
-          suggestions: "Hay xem lai noi dung bai hoc de bo sung.",
+          suggestions: "Hãy xem lại nội dung bài học để bổ sung.",
           strengths: [],
           improvements: [],
           correctAspects: [],
@@ -75,7 +75,7 @@ function normalizeEvaluation(aiResult) {
       const score = Math.min(10, Math.max(0, parseFloat(data.score) || 5));
       return {
         score,
-        feedback: data.feedback || "Hay doc ki noi dung bai hoc va cai thien bai lam.",
+        feedback: data.feedback || "Hãy đọc kỹ nội dung bài học và cải thiện bài làm.",
         suggestions: data.suggestions || "",
         strengths: data.strengths || [],
         improvements: data.improvements || [],
@@ -89,8 +89,8 @@ function normalizeEvaluation(aiResult) {
 
   return {
     score: 5,
-    feedback: "Co loi khi danh gia cau tra loi. Vui long thu lai.",
-    suggestions: "Hay kiem tra lai cau tra loi va nop lai.",
+    feedback: "Có lỗi khi đánh giá câu trả lời. Vui lòng thử lại.",
+    suggestions: "Hãy kiểm tra lại câu trả lời và nộp lại.",
     strengths: [],
     improvements: [],
     correctAspects: [],
@@ -103,29 +103,29 @@ exports.generatePracticeQuestion = async ({
   lessonContent,
   difficulty = "medium",
   questionType = "open_ended",
-  title = "Luyen tap",
+  title = "Luyện tập",
 }) => {
   try {
     const systemPrompt = `
-Ban la giao vien tao bai luyen tap cho hoc vien. Chi tra ve JSON hop le, khong kem giai thich.
-Dinh dang:
+Bạn là giáo viên tạo bài luyện tập cho học viên. Chỉ trả về JSON hợp lệ, không kèm giải thích.
+Định dạng:
 {
-  "title": "Tieu de",
-  "question": "Noi dung cau hoi chi tiet",
-  "expectedAnswer": "Goi y tra loi mau (neu co)",
-  "hints": ["Goi y 1", "Goi y 2"],
+  "title": "Tiêu đề",
+  "question": "Nội dung câu hỏi chi tiết",
+  "expectedAnswer": "Gợi ý trả lời mẫu (nếu có)",
+  "hints": ["Gợi ý 1", "Gợi ý 2"],
   "tags": ["tag1", "tag2"],
-  "explanation": "Giai thich ngan ve cau hoi"
+  "explanation": "Giải thích ngắn về câu hỏi"
 }`;
 
     const userPrompt = `
-Noi dung bai hoc:
+Nội dung bài học:
 ${lessonContent}
 
-Yeu cau:
-- Do kho: ${difficulty}
-- Loai cau hoi: ${questionType === "open_ended" ? "Tu luan" : "Trac nghiem"}
-- Tieu de goi y: ${title}
+Yêu cầu:
+- Độ khó: ${difficulty}
+- Loại câu hỏi: ${questionType === "open_ended" ? "Tự luận" : "Trắc nghiệm"}
+- Tiêu đề gợi ý: ${title}
 `;
 
     const aiResult = await callGeminiJSON({
@@ -138,7 +138,7 @@ Yeu cau:
     return normalizeQuestionResponse(aiResult, { title });
   } catch (error) {
     console.error("[PracticeAI.generateQuestion] Error:", error);
-    throw new Error("Khong the tao cau hoi luyen tap");
+    throw new Error("Không thể tạo câu hỏi luyện tập");
   }
 };
 
@@ -152,31 +152,31 @@ exports.evaluatePracticeAnswer = async ({
 }) => {
   try {
     const systemPrompt = `
-Ban la giao vien danh gia bai lam. Chi tra ve JSON hop le, khong kem giai thich ngoai JSON.
-Dinh dang:
+Bạn là giáo viên đánh giá bài làm. Chỉ trả về JSON hợp lệ, không kèm giải thích ngoài JSON.
+Định dạng:
 {
   "score": 7.5,
-  "feedback": "Nhan xet chi tiet",
-  "suggestions": "Goi y cai thien",
-  "strengths": ["Diem manh 1"],
-  "improvements": ["Can cai thien 1"],
-  "correctAspects": ["Phan dung 1"],
-  "incorrectAspects": ["Phan sai 1"]
+  "feedback": "Nhận xét chi tiết",
+  "suggestions": "Gợi ý cải thiện",
+  "strengths": ["Điểm mạnh 1"],
+  "improvements": ["Cần cải thiện 1"],
+  "correctAspects": ["Phần đúng 1"],
+  "incorrectAspects": ["Phần sai 1"]
 }`;
 
     const userPrompt = `
-Cau hoi:
+Câu hỏi:
 ${question}
 
-Cau tra loi cua hoc vien:
+Câu trả lời của học viên:
 ${userAnswer}
 
-${expectedAnswer ? `Cau tra loi goi y: ${expectedAnswer}` : ""}
+${expectedAnswer ? `Câu trả lời gợi ý: ${expectedAnswer}` : ""}
 
-Noi dung bai hoc tham khao:
+Nội dung bài học tham khảo:
 ${lessonContent}
 
-Do kho: ${difficulty}
+Độ khó: ${difficulty}
 `;
 
     const aiResult = await callGeminiJSON({

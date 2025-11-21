@@ -100,14 +100,14 @@ exports.submitPracticeAnswer = async (req, res) => {
 
     if (!answerText || !answerText.trim()) {
       return res.status(400).json({
-        message: "Cau tra loi khong duoc de trong"
+        message: "Câu trả lời không được để trống"
       });
     }
 
     const practice = await Practice.findById(practiceId).populate('lessonId courseId');
     if (!practice) {
       return res.status(404).json({
-        message: "Khong tim thay bai luyen tap"
+        message: "Không tìm thấy bài luyện tập"
       });
     }
 
@@ -155,12 +155,12 @@ exports.submitPracticeAnswer = async (req, res) => {
       submission,
       feedback: feedbackResult,
       attemptNumber: attemptCount + 1,
-      message: "Nop bai thanh cong"
+      message: "Nộp bài thành công"
     });
   } catch (error) {
     console.error("[Practice.submitPracticeAnswer] Error:", error);
     res.status(500).json({
-      message: "Loi khi nop cau tra loi"
+      message: "Lỗi khi nộp câu trả lời"
     });
   }
 };
