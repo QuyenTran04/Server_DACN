@@ -66,13 +66,16 @@ exports.createPractice = async (req, res) => {
 
     const practice = new Practice({
       title: aiResult.title || title || "Luyện tập",
-      question: aiResult.question,
+      // Handle both old and new format
+      question: aiResult.question || (aiResult.questions?.[0]?.question || ""),
+      questions: aiResult.questions || [],
+      totalQuestions: aiResult.totalQuestions || (aiResult.questions?.length || 1),
       lessonId,
       courseId: req.body.courseId,
       difficulty,
       questionType,
       lessonContent,
-      expectedAnswer: aiResult.expectedAnswer,
+      expectedAnswer: aiResult.expectedAnswer || (aiResult.questions?.[0]?.expectedAnswer || ""),
       hints: aiResult.hints || [],
       tags: aiResult.tags || []
     });
@@ -92,11 +95,34 @@ exports.createPractice = async (req, res) => {
 // Nop cau tra loi luyen tap
 exports.submitPracticeAnswer = async (req, res) => {
   try {
+    console.log("[Practice.submitPracticeAnswer] ===== NEW REQUEST =====");
+    console.log("  - URL:", req.originalUrl);
+    console.log("  - HTTP Method:", req.method);
+    console.log("  - Params:", req.params);
+    console.log("  - Body:", req.body);
+    console.log("  - Headers:", req.headers.authorization ? "Has Authorization" : "No Authorization");
+
     const { id: practiceId } = req.params;
-    const { answer } = req.body;
+    const { answer, question } = req.body;
     const userId = req.user?._id || req.user?.id;
 
-    const answerText = typeof answer === "string" ? answer : JSON.stringify(answer || "");
+    // Handle different answer formats
+    let answerText = "";
+    if (typeof answer === "string") {
+      answerText = answer;
+    } else if (answer && typeof answer === "object" && answer.answer) {
+      answerText = answer.answer;
+    } else {
+      answerText = JSON.stringify(answer || "");
+    }
+
+    // Handle question from request body - priority order
+    let questionText = "";
+    if (question) {
+      questionText = question;
+    } else if (answer && typeof answer === "object" && answer.question) {
+      questionText = answer.question;
+    }
 
     if (!answerText || !answerText.trim()) {
       return res.status(400).json({
@@ -116,10 +142,20 @@ exports.submitPracticeAnswer = async (req, res) => {
       userId
     });
 
+    // Use the question from request body (this is the correct current question)
+    const questionForEval = questionText.trim() || practice.question;
+
+    // Debug logging
+    console.log("[Practice.submitPracticeAnswer] Debug:");
+    console.log("  - Request question:", questionText);
+    console.log("  - Practice.question:", practice.question);
+    console.log("  - Final question sent to AI:", questionForEval);
+    console.log("  - User answer:", answerText.trim());
+
     const feedbackResult = await evaluatePracticeAnswer({
-      question: practice.question,
+      question: questionForEval,
       userAnswer: answerText.trim(),
-      expectedAnswer: practice.expectedAnswer,
+      expectedAnswer: "", // Empty - don't compare with expected answer
       lessonContent: practice.lessonContent,
       difficulty: practice.difficulty
     });

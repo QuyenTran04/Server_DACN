@@ -10,11 +10,15 @@ function normalizeQuestionResponse(aiResult, { title }) {
       } catch {
         return {
           title,
-          question: data.trim(),
-          expectedAnswer: "",
+          questions: [{
+            id: 1,
+            question: data.trim(),
+            expectedAnswer: "",
+            explanation: "Câu hỏi luyện tập do AI tạo từ nội dung bài học",
+          }],
+          totalQuestions: 1,
           hints: ["Hãy suy nghĩ về nội dung bài học và trả lời ngắn gọn"],
           tags: ["practice", "review"],
-          explanation: "Câu hỏi luyện tập do AI tạo từ nội dung bài học",
         };
       }
     }
@@ -24,26 +28,52 @@ function normalizeQuestionResponse(aiResult, { title }) {
     }
 
     if (data && typeof data === "object") {
+      // Nếu có mảng questions (định dạng mới)
+      if (data.questions && Array.isArray(data.questions)) {
+        return {
+          title: data.title || title,
+          questions: data.questions.map((q, index) => ({
+            id: q.id || index + 1,
+            question: q.question || q.content || "",
+            expectedAnswer: q.expectedAnswer || q.answer || "",
+            explanation: q.explanation || "",
+          })),
+          totalQuestions: data.totalQuestions || data.questions.length,
+          hints: data.hints || [],
+          tags: data.tags || ["practice"],
+        };
+      }
+
+      // Nếu chỉ có 1 câu hỏi (định dạng cũ) - chuyển đổi thành mảng
       return {
         title: data.title || title,
-        question: data.question || data.prompt || data.content || "",
-        expectedAnswer: data.expectedAnswer || data.answer || "",
+        questions: [{
+          id: 1,
+          question: data.question || data.prompt || data.content || "",
+          expectedAnswer: data.expectedAnswer || data.answer || "",
+          explanation: data.explanation || "",
+        }],
+        totalQuestions: 1,
         hints: data.hints || [],
         tags: data.tags || ["practice"],
-        explanation: data.explanation || "",
       };
     }
   } catch (err) {
     console.error("[PracticeAI.normalizeQuestionResponse] Error:", err);
   }
 
+  // Fallback với 1 câu hỏi mặc định
   return {
     title,
-    question: "Hãy tóm tắt nội dung chính của bài học và chú ý các điểm chính.",
-    expectedAnswer: "",
+    questions: [{
+      id: 1,
+      question: "Hãy tóm tắt nội dung chính của bài học và chú ý các điểm chính.",
+      expectedAnswer: "",
+      explanation: "",
+    }],
+    totalQuestions: 1,
     hints: ["Đọc kỹ nội dung và trích xuất ý chính"],
     tags: ["practice"],
-    explanation: "",
   };
 }
 
@@ -56,9 +86,9 @@ function normalizeEvaluation(aiResult) {
         data = JSON.parse(data);
       } catch {
         return {
-          score: 6,
-          feedback: String(data).trim(),
-          suggestions: "Hãy xem lại nội dung bài học để bổ sung.",
+          score: 5,
+          feedback: "Có lỗi khi đánh giá câu trả lời. Vui lòng thử lại.",
+          suggestions: "Hãy kiểm tra lại câu trả lời và nộp lại.",
           strengths: [],
           improvements: [],
           correctAspects: [],
@@ -72,16 +102,22 @@ function normalizeEvaluation(aiResult) {
     }
 
     if (data && typeof data === "object") {
-      const score = Math.min(10, Math.max(0, parseFloat(data.score) || 5));
-      return {
-        score,
-        feedback: data.feedback || "Hãy đọc kỹ nội dung bài học và cải thiện bài làm.",
-        suggestions: data.suggestions || "",
-        strengths: data.strengths || [],
-        improvements: data.improvements || [],
-        correctAspects: data.correctAspects || [],
-        incorrectAspects: data.incorrectAspects || [],
+      const result = {
+        score: Math.min(10, Math.max(0, parseFloat(data.score) || 5)),
+        feedback: data.feedback || data.response || "Không có nhận xét cụ thể.",
+        suggestions: data.suggestions || data.improvement || "Cần cải thiện thêm.",
+        strengths: Array.isArray(data.strengths) ? data.strengths : [],
+        improvements: Array.isArray(data.improvements) ? data.improvements : [],
+        correctAspects: Array.isArray(data.correctAspects) ? data.correctAspects : [],
+        incorrectAspects: Array.isArray(data.incorrectAspects) ? data.incorrectAspects : [],
       };
+
+      // Debug logging
+      console.log("[PracticeAI.normalizeEvaluation] Feedback debug:");
+      console.log("  - Original feedback:", data.feedback);
+      console.log("  - Final feedback:", result.feedback);
+
+      return result;
     }
   } catch (err) {
     console.error("[PracticeAI.normalizeEvaluation] Error:", err);
@@ -108,14 +144,38 @@ exports.generatePracticeQuestion = async ({
   try {
     const systemPrompt = `
 Bạn là giáo viên tạo bài luyện tập cho học viên. Chỉ trả về JSON hợp lệ, không kèm giải thích.
-Định dạng:
+
+QUAN TRỌNG:
+- Trả về MỘT đối tượng JSON hợp lệ duy nhất
+- Đặt toàn bộ chuỗi trong dấu ngoặc kép nếu có ký tự đặc biệt
+- Sử dụng escape sequences cho dấu ngoặc kép: \\"
+- Không có dấu phẩy thừa ở cuối mảng hoặc đối tượng
+- Đảm bảo JSON hoàn hảo
+
+Định dạng BẮT BUỘC:
 {
-  "title": "Tiêu đề",
-  "question": "Nội dung câu hỏi chi tiết",
-  "expectedAnswer": "Gợi ý trả lời mẫu (nếu có)",
-  "hints": ["Gợi ý 1", "Gợi ý 2"],
-  "tags": ["tag1", "tag2"],
-  "explanation": "Giải thích ngắn về câu hỏi"
+  "title": "Luyện tập: Tên bài học",
+  "questions": [
+    {
+      "id": 1,
+      "question": "Nội dung câu hỏi 1",
+      "expectedAnswer": "Đáp án gợi ý 1",
+      "explanation": "Giải thích câu hỏi 1"
+    },
+    {
+      "id": 2,
+      "question": "Nội dung câu hỏi 2",
+      "expectedAnswer": "Đáp án gợi ý 2",
+      "explanation": "Giải thích câu hỏi 2"
+    },
+    {
+      "id": 3,
+      "question": "Nội dung câu hỏi 3",
+      "expectedAnswer": "Đáp án gợi ý 3",
+      "explanation": "Giải thích câu hỏi 3"
+    }
+  ],
+  "totalQuestions": 3
 }`;
 
     const userPrompt = `
@@ -124,16 +184,11 @@ ${lessonContent}
 
 Yêu cầu:
 - Độ khó: ${difficulty}
-- Loại câu hỏi: ${questionType === "open_ended" ? "Tự luận" : "Trắc nghiệm"}
 - Tiêu đề gợi ý: ${title}
+- Tạo chính xác 3 câu hỏi nhỏ, mỗi câu hỏi tập trung vào một khía cảnh cụ thể
+- Mỗi câu hỏi phải độc lập, ngắn gọn, rõ ràng
 
-Hãy tạo câu hỏi với định dạng **Markdown**:
-- Sử dụng **in đậm** để nhấn mạnh các yêu cầu quan trọng
-- Sử dụng số thứ tự (1., 2., 3.) hoặc bullet points (•) cho các câu hỏi nhiều phần
-- Sử dụng \`italics\` cho thuật ngữ hoặc từ khóa quan trọng
-- Sử dụng blockquote cho các ví dụ minh họa (nếu cần)
-- Đảm bảo câu hỏi rõ ràng, có cấu trúc logic
-`;
+Hãy tạo JSON hợp lệ theo đúng định dạng trong system prompt. Title sẽ là "Luyện tập: ${title}".`;
 
     const aiResult = await callGeminiJSON({
       systemPrompt,
@@ -159,59 +214,78 @@ exports.evaluatePracticeAnswer = async ({
 }) => {
   try {
     const systemPrompt = `
-Bạn là giáo viên đánh giá bài làm. Chỉ trả về JSON hợp lệ, không kèm giải thích ngoài JSON.
-Định dạng:
+Bạn là giáo viên chuyên môn đánh giá bài luyện tập. Hãy đưa ra phản hồi chi tiết, mang tính xây dựng và sử dụng **Markdown formatting**.
+
+QUAN TRỌNG: Chỉ trả về JSON hợp lệ duy nhất với định dạng sau:
+
 {
   "score": 7.5,
-  "feedback": "Nhận xét chi tiết",
-  "suggestions": "Gợi ý cải thiện",
-  "strengths": ["Điểm mạnh 1"],
-  "improvements": ["Cần cải thiện 1"],
-  "correctAspects": ["Phần đúng 1"],
-  "incorrectAspects": ["Phần sai 1"]
+  "feedback": "## 📝 Đánh giá chi tiết\\n\\n### ✅ Điểm tốt\\n- **Điểm chính xác**: Câu trả lời đúng trọng tâm\\n- **Rõ ràng**: Diễn đạt mạch lạc\\n\\n### ⚠️ Cần cải thiện\\n- **Thiếu chi tiết**: Cần bổ sung thông tin\\n- **Lập luận**: Cần làm rõ hơn",
+  "suggestions": "## 💡 Gợi ý cải thiện\\n\\n1. **Cụ thể hóa**: Thêm ví dụ thực tế\\n2. **Cấu trúc**: Sử dụng Mở-Thân-Kết\\n3. **Thuật ngữ**: Sử dụng từ khóa chính xác\\n\\n### 📚 Tài liệu tham khảo\\n- Xem lại mục X trong bài học\\n- Tham khảo ví dụ Y"
 }`;
 
-    const userPrompt = `
-Câu hỏi:
+      const userPrompt = `
+📚 CÂU HỎI:
 ${question}
 
-Câu trả lời của học viên:
+👤 CÂU TRẢ LỜI CỦA HỌC VIÊN:
 ${userAnswer}
 
-${expectedAnswer ? `Câu trả lời gợi ý: ${expectedAnswer}` : ""}
-
-Nội dung bài học tham khảo:
+📖 NỘI DUNG BÀI HỌC THAM KHẢO:
 ${lessonContent}
 
-Độ khó: ${difficulty}
+🎯 ĐỘ KHÓ: ${difficulty}
 
-Hãy trả lời đánh giá với định dạng **Markdown**:
-- Sử dụng **in đậm** cho các điểm chính
-- Sử dụng *in nghiêng* để nhấn mạnh
-- Sử dụng danh sách (bullet points) để liệt kê các điểm
-- Sử dụng \\\`code\\\` cho thuật ngữ quan trọng
-- Sử dụng blockquote để trích dẫn hay ví dụ minh họa
+HÃY ĐÁNH GIÁ CHI TIẾT THEO CÁC TIÊU CHÍ:
+
+### 1. TÍNH CHÍNH XÁC (40%)
+- Có trả lời đúng trọng tâm câu hỏi không?
+- Thông tin có chính xác theo bài học không?
+
+### 2. TÍNH ĐẦY ĐỦ (30%)
+- Có đủ thông tin cần thiết không?
+- Có bỏ sót các điểm quan trọng không?
+
+### 3. RÕ RÀNG VÀ MẠCH LẠC (30%)
+- Diễn đạt có dễ hiểu không?
+- Cấu trúc có logic không?
+
+### 📝 YÊU CẦU PHẢN HỒI:
+
+**TRƯỜNG HỢP ĐÚNG (score 7-10):**
+- Nêu bật **điểm xuất sắc** và **điểm tốt**
+- Gợi ý cách làm **hoàn hảo hơn**
+- Tặng kèm lời khen khích lệ
+
+**TRƯỜNG HỢP CHƯA ĐỦ (score 4-6):**
+- Nêu cụ thể **thiếu sót gì**
+- Chỉ **gần đúng ở điểm nào**
+- Hướng dẫn **cách cải thiện**
+
+**TRƯỜNG HỢP SAI (score 0-3):**
+- Phân tích **nguyên nhân sai**
+- Chỉ ra **hiểu lầm ở đâu**
+- Đưa ra **lộ trình học lại**
+
+### 💫 LƯU Ý QUAN TRỌNG:
+- Luôn bắt đầu bằng lời khen hoặc động viên
+- Sử dụng EMOJI phù hợp: ✅ ⚠️ ❌ 💡 📚 💪
+- Feedback phải **xây dựng**, không chê bai
+- Luôn có **gợi ý cụ thể** để cải thiện
+- Tham khảo chính xác nội dung bài học
+- Sử dụng **Markdown formatting** chuyên nghiệp
 `;
 
     const aiResult = await callGeminiJSON({
       systemPrompt,
       userPrompt,
-      temperature: 0.3,
-      maxOutputTokens: 1000,
+      temperature: 0.4, // Tăng một chút để sáng tạo hơn
+      maxOutputTokens: 1500, // Tăng để có feedback chi tiết hơn
     });
 
     return normalizeEvaluation(aiResult);
   } catch (error) {
-    console.error("[PracticeAI.evaluateAnswer] Error:", error);
-    // Return fallback evaluation
-    return {
-      score: 5,
-      feedback: "Co loi khi danh gia cau tra loi. Vui long thu lai.",
-      suggestions: "Hay kiem tra lai cau tra loi va nop lai.",
-      strengths: [],
-      improvements: [],
-      correctAspects: [],
-      incorrectAspects: [],
-    };
+    console.error("[PracticeAI.evaluatePracticeAnswer] Error:", error);
+    throw new Error("Không thể đánh giá câu trả lời");
   }
 };
