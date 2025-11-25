@@ -211,6 +211,8 @@ exports.evaluatePracticeAnswer = async ({
   expectedAnswer = "",
   lessonContent,
   difficulty = "medium",
+  answerType = "text",
+  language = "javascript",
 }) => {
   try {
     const systemPrompt = `
@@ -230,6 +232,7 @@ ${question}
 
 👤 CÂU TRẢ LỜI CỦA HỌC VIÊN:
 ${userAnswer}
+${answerType === 'code' ? `\n\n💻 NGÔN NGỮ LẬP TRÌNH: ${language}\n\n📝 CODE:\n\`\`\`${language}\n${userAnswer}\n\`\`` : ''}
 
 📖 NỘI DUNG BÀI HỌC THAM KHẢO:
 ${lessonContent}
@@ -252,6 +255,13 @@ HÃY ĐÁNH GIÁ CHI TIẾT THEO CÁC TIÊU CHÍ:
 
 ### 📝 YÊU CẦU PHẢN HỒI:
 
+**ĐẶC BIỆT CHO CODE:**
+${answerType === 'code' ? `
+- **Syntax**: Cú pháp có đúng không?
+- **Logic**: Logic có đúng và hiệu quả không?
+- **Best practices**: Có tuân thủ coding standards không?
+- **Code readability**: Code có dễ đọc và hiểu không?` : ''}
+
 **TRƯỜNG HỢP ĐÚNG (score 7-10):**
 - Nêu bật **điểm xuất sắc** và **điểm tốt**
 - Gợi ý cách làm **hoàn hảo hơn**
@@ -269,11 +279,12 @@ HÃY ĐÁNH GIÁ CHI TIẾT THEO CÁC TIÊU CHÍ:
 
 ### 💫 LƯU Ý QUAN TRỌNG:
 - Luôn bắt đầu bằng lời khen hoặc động viên
-- Sử dụng EMOJI phù hợp: ✅ ⚠️ ❌ 💡 📚 💪
+- Sử dụng EMOJI phù hợp: ✅ ⚠️ ❌ 💡 📚 💪 ⌨️ 💻
 - Feedback phải **xây dựng**, không chê bai
 - Luôn có **gợi ý cụ thể** để cải thiện
-- Tham khảo chính xác nội dung bài học
+- ${answerType === 'code' ? 'Cho code example cụ thể để cải thiện' : 'Tham khảo chính xác nội dung bài học'}
 - Sử dụng **Markdown formatting** chuyên nghiệp
+- ${answerType === 'code' ? 'Sử dụng code blocks cho ví dụ' : ''}
 `;
 
     const aiResult = await callGeminiJSON({

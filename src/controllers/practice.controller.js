@@ -103,7 +103,7 @@ exports.submitPracticeAnswer = async (req, res) => {
     console.log("  - Headers:", req.headers.authorization ? "Has Authorization" : "No Authorization");
 
     const { id: practiceId } = req.params;
-    const { answer, question } = req.body;
+    const { answer, question, answerType = "text", language = "javascript" } = req.body;
     const userId = req.user?._id || req.user?.id;
 
     // Handle different answer formats
@@ -157,7 +157,9 @@ exports.submitPracticeAnswer = async (req, res) => {
       userAnswer: answerText.trim(),
       expectedAnswer: "", // Empty - don't compare with expected answer
       lessonContent: practice.lessonContent,
-      difficulty: practice.difficulty
+      difficulty: practice.difficulty,
+      answerType,
+      language
     });
 
     const submission = new PracticeSubmission({
@@ -166,6 +168,8 @@ exports.submitPracticeAnswer = async (req, res) => {
       lessonId: practice.lessonId._id,
       courseId: practice.courseId._id,
       answer: answerText.trim(),
+      answerType,
+      language: answerType === 'code' ? language : undefined,
       feedback: feedbackResult,
       attemptNumber: attemptCount + 1,
       isCorrect: feedbackResult.score >= 7,

@@ -8,6 +8,8 @@ const practiceSubmissionSchema = new Schema(
     lessonId: { type: Schema.Types.ObjectId, ref: "Lesson", required: true },
     courseId: { type: Schema.Types.ObjectId, ref: "Course", required: true },
     answer: { type: String, required: true },
+    answerType: { type: String, enum: ["text", "code"], default: "text" },
+    language: { type: String }, // Language for code answers
     feedback: {
       score: { type: Number, min: 0, max: 10 },
       feedback: { type: String, required: true },
