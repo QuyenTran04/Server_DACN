@@ -18,6 +18,7 @@ const aiRoutes = require("./routes/ai.routes");
 const searchRoutes = require("./routes/search.routes");
 const documentRoutes = require("./routes/document.routes");
 const testRoutes = require("./routes/test.routes");
+const reviewRoutes = require("./routes/review.routes");
 
 connectDB();
 const app = express();
@@ -49,6 +50,7 @@ app.use("/api/ai", aiRoutes);
 app.use("/api/embeddings", embeddingRoutes);
 app.use("/api/search", searchRoutes);
 app.use("/api/test", testRoutes);
+app.use("/api/reviews", reviewRoutes);
 
 const PORT = process.env.PORT || 5000;
 

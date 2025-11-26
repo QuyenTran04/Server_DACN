@@ -31,6 +31,10 @@ const courseSchema = new Schema(
       description:
         "Phong cách giải thích AI. 'auto' = tự phân tích từ title/description",
     },
+    // Rating trung bình của khóa học (thang điểm 10)
+    avgRating: { type: Number, default: 0, min: 0, max: 10 },
+    // Tổng số người đã đánh giá
+    totalReviews: { type: Number, default: 0 },
   },
   { timestamps: true }
 );
@@ -111,5 +115,53 @@ courseSchema.post("findOneAndDelete", async function (res, next) {
   }
   next();
 });
+
+/**
+ * Cập nhật rating trung bình của khóa học
+ * Được gọi khi có thay đổi về đánh giá
+ */
+async function updateCourseRating(courseId) {
+  try {
+    const Review = require("./Review");
+    if (!courseId) return { avgRating: 0, totalReviews: 0 };
+
+    let courseObjId;
+    try {
+      courseObjId =
+        typeof courseId === "string"
+          ? new mongoose.Types.ObjectId(courseId)
+          : courseId;
+    } catch (_e) {
+      // Nếu không chuyển được ObjectId thì trả về mặc định
+      return { avgRating: 0, totalReviews: 0 };
+    }
+
+    const stats = await Review.aggregate([
+      { $match: { course: courseObjId, hidden: { $ne: true } } },
+      {
+        $group: {
+          _id: "$course",
+          avgRating: { $avg: "$rating" },
+          totalReviews: { $sum: 1 },
+        },
+      },
+    ]);
+
+    const ratingData = stats[0] || { avgRating: 0, totalReviews: 0 };
+
+    await Course.findByIdAndUpdate(courseId, {
+      avgRating: Math.round(ratingData.avgRating * 10) / 10, // Làm tròn 1 chữ số thập phân
+      totalReviews: ratingData.totalReviews,
+    });
+
+    return ratingData;
+  } catch (error) {
+    console.error("[updateCourseRating] Error:", error);
+    return { avgRating: 0, totalReviews: 0 };
+  }
+}
+
+// Export helper function để sử dụng trong review controller
+courseSchema.statics.updateRating = updateCourseRating;
 
 module.exports = mongoose.model("Course", courseSchema);

@@ -146,8 +146,6 @@ documentSchema.post("findOneAndDelete", async function (res, next) {
   next();
 });
 
-
 documentSchema.index({ course: 1, lesson: 1 });
-documentSchema.index({ course: 1 });
 
 module.exports = mongoose.model("Document", documentSchema);
