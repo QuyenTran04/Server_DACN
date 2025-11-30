@@ -8,13 +8,197 @@ const { callLLMJSON } = require("../services/llm.service");
 const { normalizeQuizItems } = require("../services/quiz-ai.service");
 const { ensureLessons, indexByLetter } = require("../utils/quiz-normalize");
 const { extractKeyVocabulary } = require("../utils/dynamicPrompt.helper");
-const { generateDetailedLessonDocument } = require("../services/document-detailed.service");
+const { generateDetailedLessonDocument, generateDetailedLessonDocumentWithTimeout } = require("../services/document-detailed-improved.service");
 const { scheduleDocumentGeneration, scheduleDocumentGenerationForLesson } = require("../services/document-generation.service");
 
 const AUTO_LESSON_MIN = 6;
 const AUTO_LESSON_MAX = 20;
 const QUIZ_MIN_PER_LESSON = 12;
 const QUIZ_MAX_PER_LESSON = 40;
+
+// Helper functions for enhanced fallback content
+function generateEnhancedFallbackContent({ lessonTitle, lessonContent, courseTitle, level }) {
+  // Extract key concepts from lesson title and content
+  const keyConcepts = extractKeyConceptsFromTitle(lessonTitle);
+
+  const sections = [
+    `## Mục tiêu học tập`,
+    `Sau khi hoàn thành bài học này, bạn sẽ có thể:`,
+    `- Hiểu rõ khái niệm và bản chất của "${lessonTitle}"`,
+    `- Nắm vững các kiến thức cốt lõi và nguyên lý hoạt động`,
+    `- Vận dụng được kỹ thuật vào thực tế trong lĩnh vực ${courseTitle}`,
+    `- Có nền tảng vững chắc cho các bài học tiếp theo`,
+
+    `## Kiến thức cốt lõi`,
+    `### 1. Định nghĩa và bản chất`,
+    `${lessonTitle} là một khái niệm/kỹ thuật quan trọng trong lĩnh vực ${courseTitle}. Đây là kiến thức nền tảng mà mọi học viên cần nắm vững để có thể phát triển thêm các kỹ năng chuyên sâu.`,
+    ``,
+    `### 2. Các thành phần chính`,
+    generateDetailedComponents(lessonTitle, keyConcepts),
+
+    `### 3. Nguyên lý hoạt động`,
+    `${lessonTitle} hoạt động dựa trên các nguyên lý cơ bản sau:`,
+    `- Nguyên lý thứ nhất: Tương tác và xử lý các thành phần`,
+    `- Nguyên lý thứ hai: Điều khiển luồng thực thi`,
+    `- Nguyên lý thứ ba: Tối ưu hóa và quản lý tài nguyên`,
+
+    `## Quy trình và các bước thực hiện`,
+    `### Bước-by-step implementation:`,
+    `1. **Giai đoạn chuẩn bị**: Phân tích yêu cầu và thiết kế giải pháp`,
+    `2. **Giai đoạn triển khai**: Thực hiện theo từng bước có hệ thống`,
+    `3. **Giai đoạn kiểm tra**: Kiểm tra và xác minh kết quả`,
+    `4. **Giai đoạn tối ưu**: Cải thiện hiệu suất và sửa lỗi`,
+    ``,
+    `### Công thức và quy tắc quan trọng:`,
+    `- Quy tắc áp dụng: Khi nào và cách sử dụng ${lessonTitle}`,
+    `- Công thức tính toán: Các biểu thức và tính toán liên quan`,
+    `- Điều kiện tiên quyết: Những kiến thức cần có trước khi học`,
+
+    `## Ví dụ thực tiễn & Case Studies`,
+    generateDetailedExamples(lessonTitle, courseTitle, keyConcepts),
+
+    `## Bài tập luyện tập`,
+    generateDetailedExercises(lessonTitle, keyConcepts),
+
+    `## Tóm tắt và hướng tiếp theo`,
+    `${lessonTitle} là kiến thức nền tảng quan trọng trong khóa học ${courseTitle}. Hiểu rõ bài học này sẽ giúp bạn có nền tảng vững chắc cho các nội dung chuyên sâu hơn.`,
+    ``,
+    `### Điểm cần ghi nhớ:`,
+    `- Nắm vững các khái niệm cơ bản của ${lessonTitle}`,
+    `- Hiểu rõ nguyên lý hoạt động và cách áp dụng`,
+    `- Thực hành thường xuyên để thành thạo`,
+    ``,
+    `### Hướng học tập tiếp theo:`,
+    `- Tìm hiểu sâu hơn về các ứng dụng nâng cao của ${lessonTitle}`,
+    `- Khám phá các kỹ thuật liên quan và kết hợp`,
+    `- Thực hành qua các dự án thực tế`
+  ];
+
+  let content = `# ${lessonTitle}\n\n`;
+  content += sections.join('\n\n');
+
+  // Add original content if available
+  if (lessonContent && lessonContent.length > 50) {
+    content += `\n\n## Nội dung bổ sung từ khóa học\n\n${lessonContent}`;
+  }
+
+  // Add programming-specific content if it's a programming course
+  if (isProgrammingCourse(courseTitle, lessonTitle)) {
+    content += `\n\n## Code Examples and Implementation\n\n${generateCodeExamples(lessonTitle, keyConcepts)}`;
+  }
+
+  return content;
+}
+
+// Helper function to extract key concepts from title
+function extractKeyConceptsFromTitle(lessonTitle) {
+  const concepts = [];
+
+  // Common programming concepts
+  const programmingConcepts = ['mảng', 'chuỗi', 'array', 'string', 'biến', 'variable', 'hàm', 'function', 'lớp', 'class', 'đối tượng', 'object', 'vòng lặp', 'loop', 'điều kiện', 'condition', 'toán tử', 'operator'];
+
+  // Extract words that might be concepts
+  const words = lessonTitle.toLowerCase().split(/\s+/);
+  words.forEach(word => {
+    if (programmingConcepts.includes(word) || word.length > 4) {
+      concepts.push(word);
+    }
+  });
+
+  return concepts.length > 0 ? concepts : ['khái niệm chính', 'kỹ thuật cơ bản'];
+}
+
+// Helper function to generate detailed components
+function generateDetailedComponents(lessonTitle, concepts) {
+  let components = `Các thành phần chính của ${lessonTitle} bao gồm:\n\n`;
+
+  concepts.forEach((concept, index) => {
+    components += `- **Thành phần ${index + 1}: ${concept}**\n`;
+    components += `  - Mô tả: Đây là yếu tố quan trọng trong cấu trúc của ${lessonTitle}\n`;
+    components += `  - Chức năng: Đảm bảo hoạt động chính xác và hiệu quả\n`;
+    components += `  - Liên quan: Tương tác với các thành phần khác trong hệ thống\n\n`;
+  });
+
+  return components;
+}
+
+// Helper function to generate detailed examples
+function generateDetailedExamples(lessonTitle, courseTitle, concepts) {
+  let examples = `### Ví dụ 1: Áp dụng cơ bản\n`;
+  examples += `**Bối cảnh**: Một tình huống thực tế trong lĩnh vực ${courseTitle}\n`;
+  examples += `**Giải pháp**: Sử dụng ${lessonTitle} để giải quyết vấn đề theo các bước:\n`;
+  examples += `1. Phân tích vấn đề và xác định yêu cầu\n`;
+  examples += `2. Áp dụng nguyên lý của ${lessonTitle}\n`;
+  examples += `3. Triển khai và kiểm tra kết quả\n\n`;
+
+  examples += `### Ví dụ 2: Case study nâng cao\n`;
+  examples += `**Tình huống**: Một doanh nghiệp trong ngành ${courseTitle} đã áp dụng thành công ${lessonTitle}\n`;
+  examples += `**Kết quả**: Đạt được cải thiện đáng kể về hiệu suất và chất lượng\n`;
+  examples += `**Bài học kinh nghiệm**: Các yếu tố then chốt tạo nên thành công\n\n`;
+
+  return examples;
+}
+
+// Helper function to generate detailed exercises
+function generateDetailedExercises(lessonTitle, concepts) {
+  let exercises = `### Bài tập 1: Kiểm tra kiến thức nền tảng\n`;
+  exercises += `1. Trình bày lại định nghĩa và bản chất của ${lessonTitle} bằng lời của bạn\n`;
+  exercises += `2. Liệt kê và giải thích 5 lợi ích chính của việc áp dụng ${lessonTitle}\n`;
+  exercises += `3. So sánh ưu và nhược điểm của các phương pháp khác nhau\n\n`;
+
+  exercises += `### Bài tập 2: Thực hành có hướng dẫn\n`;
+  exercises += `1. Cho một tình huống cụ thể, hãy thiết kế quy trình áp dụng ${lessonTitle}\n`;
+  exercises += `2. Xác định các rủi ro tiềm ẩn và đề xuất cách khắc phục\n`;
+  exercises += `3. Thiết lập các chỉ số đo lường hiệu quả\n\n`;
+
+  exercises += `### Bài tập 3: Case study thực tế\n`;
+  exercises += `1. Tìm một ví dụ thực tế về việc áp dụng ${lessonTitle} trong ngành liên quan\n`;
+  exercises += `2. Phân tích các yếu tố thành công và thất bại\n`;
+  exercises += `3. Đề xuất cải tiến cho tình huống đó\n\n`;
+
+  return exercises;
+}
+
+// Helper function to check if it's a programming course
+function isProgrammingCourse(courseTitle, lessonTitle) {
+  const text = `${courseTitle} ${lessonTitle}`.toLowerCase();
+  return /lập\s*trình|programming|code|python|javascript|java|c\+\+|react|node|sql|database|array|string|mảng|chuỗi/i.test(text);
+}
+
+// Helper function to generate code examples
+function generateCodeExamples(lessonTitle, concepts) {
+  let codeExamples = `### Code Example 1: Basic Implementation\n`;
+  codeExamples += `Ví dụ cơ bản về ${lessonTitle} trong Java:\n`;
+  codeExamples += `\`\`\`java\n`;
+
+  if (concepts.includes('mảng') || concepts.includes('array')) {
+    codeExamples += `// Khai báo và sử dụng mảng một chiều\nint[] numbers = {1, 2, 3, 4, 5};\n\n// In ra các phần tử của mảng\nfor (int i = 0; i < numbers.length; i++) {\n    System.out.println("Phần tử " + i + ": " + numbers[i]);\n}\n\n// Mảng nhiều chiều\nint[][] matrix = {\n    {1, 2, 3},\n    {4, 5, 6},\n    {7, 8, 9}\n};\n`;
+  } else if (concepts.includes('chuỗi') || concepts.includes('string')) {
+    codeExamples += `// Khai báo và khởi tạo chuỗi\nString greeting = "Hello, World!";\nString name = "Java";\n\n// Các phương thức xử lý chuỗi phổ biến\nSystem.out.println("Độ dài: " + greeting.length());\nSystem.out.println("Chữ hoa: " + greeting.toUpperCase());\nSystem.out.println("Chữ thường: " + greeting.toLowerCase());\n\n// Nối chuỗi\nString message = greeting + " " + name;\nSystem.out.println(message);\n`;
+  } else {
+    codeExamples += `// Ví dụ cơ bản về ${lessonTitle}\npublic class Main {\n    public static void main(String[] args) {\n        // Áp dụng ${lessonTitle}\n        System.out.println("Implementing ${lessonTitle}");\n        \n        // Thêm các logic cụ thể tại đây\n        // TODO: Implement your solution\n    }\n}\n`;
+  }
+
+  codeExamples += `\`\`\`\n\n`;
+
+  return codeExamples;
+}
+
+function extractKeywordsFromContent(content) {
+  const words = content.toLowerCase().split(/\s+/);
+  const keywords = new Set();
+
+  // Extract words that look like keywords (capitalized, technical terms)
+  content.split(/\n/).forEach(line => {
+    const matches = line.match(/\b[A-Z][a-zA-Z]+\b/g);
+    if (matches) {
+      matches.forEach(word => keywords.add(word));
+    }
+  });
+
+  // Limit to 6 keywords
+  return Array.from(keywords).slice(0, 6);
+}
 
 const MIN_LESSON_TARGET = Math.min(AUTO_LESSON_MIN, AUTO_LESSON_MAX);
 function isVocabularyCourse(prompt = "") {
@@ -743,6 +927,7 @@ exports.startCourseCreation = async (req, res) => {
       instructor: instructorId,
       price: draft.price ?? 0,
       published: false,
+      level: draft.assessedLevel || "Beginner", // Save the assessed level from survey
     });
 
     console.log(`[startCourseCreation] ✅ Course tạo xong: ${courseDoc._id}`);
@@ -770,24 +955,21 @@ exports.startCourseCreation = async (req, res) => {
     if (lessonDocs.length > 0) {
       const firstLesson = lessonDocs[0];
       const firstOriginalLesson = draft.lessons[0];
-      
+
       try {
         console.log(`[startCourseCreation] 🔄 Tạo document bài 1: "${firstOriginalLesson.title}"`);
-        
-        // Add timeout 180 giây để đảm bảo AI đủ thời gian tạo tài liệu chi tiết
-        const docPromise = generateDetailedLessonDocument({
+
+        // Use dedicated function with timeout for lesson 1
+        const docPromise = generateDetailedLessonDocumentWithTimeout({
           lessonTitle: firstOriginalLesson.title,
           lessonContent: firstOriginalLesson.content || "",
           courseTitle: draft.title,
           courseDescription: draft.description,
-          level: draft.level || "Beginner",
+          level: draft.assessedLevel || "Beginner", // Use assessed level from survey
+          timeoutMs: 180000, // 3 minutes for lesson 1
         });
 
-        const timeoutPromise = new Promise((_, reject) =>
-          setTimeout(() => reject(new Error("Document generation timeout (180s)")), 180000)
-        );
-
-        const docData = await Promise.race([docPromise, timeoutPromise]);
+        const docData = await docPromise; // Timeout is handled inside the function
 
         if (!docData || !docData.content) {
           throw new Error("Invalid document data received");
@@ -813,26 +995,55 @@ exports.startCourseCreation = async (req, res) => {
         console.error(`[startCourseCreation] ❌ Lỗi tạo document bài 1:`, {
           message: err.message,
           stack: err.stack,
+          lessonTitle: firstOriginalLesson.title,
+          timeout: 180000,
         });
         
-        // Fallback: create minimal document if generation fails
+        // Fallback: create enhanced document if generation fails
         try {
-          console.log(`[startCourseCreation] 🔄 Creating fallback document...`);
+          console.log(`[startCourseCreation] 🔄 Creating enhanced fallback document...`);
+
+          const enhancedContent = generateEnhancedFallbackContent({
+            lessonTitle: firstOriginalLesson.title,
+            lessonContent: firstOriginalLesson.content || "",
+            courseTitle: draft.title,
+            level: draft.assessedLevel || "Beginner",
+          });
+
           await Document.create({
             lesson: firstLesson._id,
             course: courseDoc._id,
             title: firstOriginalLesson.title,
-            content: `# ${firstOriginalLesson.title}\n\n${firstOriginalLesson.content || "Nội dung sẽ được cập nhật..."}`,
+            content: enhancedContent,
             contentType: "markdown",
             generatedByAI: false,
-            summary: "Tài liệu được tạo tự động",
-            tags: [],
+            summary: "Tài liệu dự phòng được tạo tự động",
+            tags: extractKeywordsFromContent(enhancedContent),
             order: 0,
           });
           firstLessonReady = true;
-          console.log(`[startCourseCreation] ✅ Fallback document created`);
+          console.log(`[startCourseCreation] ✅ Enhanced fallback document created, length: ${enhancedContent.length}`);
         } catch (fallbackErr) {
-          console.error(`[startCourseCreation] ❌ Fallback also failed:`, fallbackErr.message);
+          console.error(`[startCourseCreation] ❌ Enhanced fallback also failed:`, fallbackErr.message);
+
+          // Last resort: minimal document
+          try {
+            await Document.create({
+              lesson: firstLesson._id,
+              course: courseDoc._id,
+              title: firstOriginalLesson.title,
+              content: `# ${firstOriginalLesson.title}\n\nNội dung đang được cập nhật. Vui lòng quay lại sau.`,
+              contentType: "markdown",
+              generatedByAI: false,
+              summary: "Tài liệu tạm thời",
+              tags: [],
+              order: 0,
+            });
+            firstLessonReady = true;
+            console.log(`[startCourseCreation] ✅ Minimal fallback document created`);
+          } catch (minimalErr) {
+            console.error(`[startCourseCreation] ❌ All fallback attempts failed:`, minimalErr.message);
+          }
         }
       }
     }
@@ -925,6 +1136,9 @@ exports.streamCourseCreation = async (req, res) => {
         message: "Stream kết nối thành công"
       });
 
+      // Get course level from course data or default to Beginner
+      const courseLevel = course.level || "Beginner";
+
       // Stream tài liệu cho bài 2 trở đi
       for (let i = 1; i < lessons.length; i++) {
         if (!clientConnected) {
@@ -938,20 +1152,17 @@ exports.streamCourseCreation = async (req, res) => {
         try {
           console.log(`[streamCourseCreation] Tạo document bài ${i + 1}...`);
 
-          // Add timeout 240s cho stream (bài 2+ cần nhiều thời gian hơn cho expansion)
-          const docPromise = generateDetailedLessonDocument({
+          // Use dedicated function with timeout for stream lessons
+          const docPromise = generateDetailedLessonDocumentWithTimeout({
             lessonTitle: lesson.title,
             lessonContent: lesson.content || "",
             courseTitle: course.title,
             courseDescription: course.description,
-            level: "Beginner",
+            level: courseLevel, // Use course level from database
+            timeoutMs: 240000, // 4 minutes for stream lessons
           });
 
-          const timeoutPromise = new Promise((_, reject) =>
-            setTimeout(() => reject(new Error(`Document generation timeout for lesson ${i + 1}`)), 240000)
-          );
-
-          const docData = await Promise.race([docPromise, timeoutPromise]);
+          const docData = await docPromise; // Timeout is handled inside
 
           if (!docData || !docData.content) {
             throw new Error("Invalid document data received");
@@ -985,34 +1196,67 @@ exports.streamCourseCreation = async (req, res) => {
         } catch (err) {
           console.error(`[streamCourseCreation] ❌ Lỗi bài ${i + 1}:`, err.message);
           
-          // Try fallback: create minimal document
+          // Try enhanced fallback: create structured document
           try {
-            console.log(`[streamCourseCreation] 🔄 Creating fallback document for bài ${i + 1}...`);
+            console.log(`[streamCourseCreation] 🔄 Creating enhanced fallback document for bài ${i + 1}...`);
+
+            const enhancedContent = generateEnhancedFallbackContent({
+              lessonTitle: lesson.title,
+              lessonContent: lesson.content || "",
+              courseTitle: course.title,
+              level: courseLevel,
+            });
+
             await Document.create({
               lesson: lesson._id,
               course: courseId,
               title: lesson.title,
-              content: `# ${lesson.title}\n\n${lesson.content || "Nội dung sẽ được cập nhật..."}`,
+              content: enhancedContent,
               contentType: "markdown",
               generatedByAI: false,
-              summary: "Tài liệu được tạo tự động",
-              tags: [],
+              summary: "Tài liệu dự phòng được tạo tự động",
+              tags: extractKeywordsFromContent(enhancedContent),
               order: i,
             });
-            
+
             sendEvent("lesson_ready", {
               lessonIndex: i,
               lessonId: lesson._id,
               title: lesson.title,
-              message: `Bài ${i + 1} sẵn sàng (fallback)`,
+              message: `Bài ${i + 1} sẵn sàng (enhanced fallback)`,
             });
-            console.log(`[streamCourseCreation] ✅ Fallback document for bài ${i + 1} created`);
+            console.log(`[streamCourseCreation] ✅ Enhanced fallback document for bài ${i + 1} created, length: ${enhancedContent.length}`);
           } catch (fallbackErr) {
-            console.error(`[streamCourseCreation] ❌ Fallback also failed for bài ${i + 1}:`, fallbackErr.message);
-            sendEvent("lesson_error", {
-              lessonIndex: i,
-              message: `Lỗi khi tạo tài liệu bài ${i + 1}: ${err.message}`,
-            });
+            console.error(`[streamCourseCreation] ❌ Enhanced fallback also failed for bài ${i + 1}:`, fallbackErr.message);
+
+            // Last resort: minimal document
+            try {
+              await Document.create({
+                lesson: lesson._id,
+                course: courseId,
+                title: lesson.title,
+                content: `# ${lesson.title}\n\nNội dung đang được cập nhật. Vui lòng quay lại sau.`,
+                contentType: "markdown",
+                generatedByAI: false,
+                summary: "Tài liệu tạm thời",
+                tags: [],
+                order: i,
+              });
+
+              sendEvent("lesson_ready", {
+                lessonIndex: i,
+                lessonId: lesson._id,
+                title: lesson.title,
+                message: `Bài ${i + 1} sẵn sàng (minimal fallback)`,
+              });
+              console.log(`[streamCourseCreation] ✅ Minimal fallback document for bài ${i + 1} created`);
+            } catch (minimalErr) {
+              console.error(`[streamCourseCreation] ❌ All fallback attempts failed for bài ${i + 1}:`, minimalErr.message);
+              sendEvent("lesson_error", {
+                lessonIndex: i,
+                message: `Lỗi khi tạo tài liệu bài ${i + 1}: ${err.message}`,
+              });
+            }
           }
           // Continue với bài tiếp theo
         }

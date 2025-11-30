@@ -31,6 +31,12 @@ const courseSchema = new Schema(
       description:
         "Phong cách giải thích AI. 'auto' = tự phân tích từ title/description",
     },
+    // Cấp độ khóa học (determined from AI assessment)
+    level: {
+      type: String,
+      enum: ["Beginner", "Intermediate", "Advanced"],
+      default: "Beginner",
+    },
     // Rating trung bình của khóa học (thang điểm 10)
     avgRating: { type: Number, default: 0, min: 0, max: 10 },
     // Tổng số người đã đánh giá

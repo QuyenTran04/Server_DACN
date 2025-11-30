@@ -1,7 +1,7 @@
 const { getAgenda } = require("../configs/agenda");
 const Document = require("../models/Document");
 const Lesson = require("../models/Lesson");
-const { generateLessonDocument } = require("./document-ai.service");
+const { generateDetailedLessonDocument } = require("./document-detailed-improved.service");
 
 // Định nghĩa job "generateLessonDocuments"
 const defineGenerateDocumentJob = () => {
@@ -16,8 +16,8 @@ const defineGenerateDocumentJob = () => {
 
       console.log(`[Document Job] 🔄 Bắt đầu tạo tài liệu cho bài: ${lessonTitle}`);
 
-      // Tạo tài liệu
-      const docData = await generateLessonDocument({
+      // Tạo tài liệu với improved service để đảm bảo chất lượng và tính nhất quán
+      const docData = await generateDetailedLessonDocument({
         lessonTitle,
         lessonContent: lessonContent || "",
         courseTitle,
