@@ -68,7 +68,10 @@ router.delete("/documents/:id", admin.deleteDocument);
 router.get("/settings", admin.getSettings);
 router.post("/settings", admin.updateSettings);
 
-/* ===== 11) Nhật ký hoạt động ===== */
+/* ===== 11) Quản lý ví ===== */
+router.post("/wallet/credit", admin.creditUserWallet);
+
+/* ===== 12) Nhật ký hoạt động ===== */
 router.get("/activity-logs", admin.listActivityLogs);
 
 module.exports = router;

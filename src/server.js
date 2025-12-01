@@ -19,16 +19,17 @@ const searchRoutes = require("./routes/search.routes");
 const documentRoutes = require("./routes/document.routes");
 const testRoutes = require("./routes/test.routes");
 const reviewRoutes = require("./routes/review.routes");
+const walletRoutes = require("./routes/wallet.routes");
 
 connectDB();
 const app = express();
 app.use(express.json());
 app.use(cookieParser());
 
-const FRONTEND_ORIGIN = process.env.FRONTEND_ORIGIN || "http://localhost:5173";
+const FRONTEND_ORIGIN = process.env.FRONTEND_ORIGIN || "http://localhost:5177";
 app.use(
   cors({
-    origin: FRONTEND_ORIGIN, // phải khớp domain FE
+    origin: [FRONTEND_ORIGIN, "http://localhost:5173", "http://localhost:5174", "http://localhost:5175", "http://localhost:5176", "http://localhost:5177"], // cho phép nhiều ports
     credentials: true, // bắt buộc nếu dùng cookie httpOnly
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization"],
@@ -51,6 +52,7 @@ app.use("/api/embeddings", embeddingRoutes);
 app.use("/api/search", searchRoutes);
 app.use("/api/test", testRoutes);
 app.use("/api/reviews", reviewRoutes);
+app.use("/api/wallet", walletRoutes);
 
 const PORT = process.env.PORT || 5000;
 

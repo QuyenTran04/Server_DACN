@@ -10,6 +10,7 @@ const { ensureLessons, indexByLetter } = require("../utils/quiz-normalize");
 const { extractKeyVocabulary } = require("../utils/dynamicPrompt.helper");
 const { generateDetailedLessonDocument, generateDetailedLessonDocumentWithTimeout } = require("../services/document-detailed-improved.service");
 const { scheduleDocumentGeneration, scheduleDocumentGenerationForLesson } = require("../services/document-generation.service");
+const walletService = require("../services/wallet.service");
 
 const AUTO_LESSON_MIN = 6;
 const AUTO_LESSON_MAX = 20;
@@ -462,6 +463,8 @@ function analyzeAssessmentLevel(assessment = {}) {
 
 // POST /api/ai/courses/draft
 exports.generateCourseDraft = async (req, res) => {
+  let walletCharge = null;
+  const userId = req.user?._id || req.user?.id;
   try {
     console.log(`[generateCourseDraft] Starting...`);
     const {
@@ -609,6 +612,23 @@ Mục tiêu: xây lộ trình học hợp lý, bao quát kiến thức cần thi
         },
       ],
     };
+
+    try {
+      walletCharge = await walletService.chargeForAction(userId, "aiCourse", {
+        endpoint: "generateCourseDraft",
+      });
+    } catch (err) {
+      if (err.code === "INSUFFICIENT_BALANCE") {
+        return res.status(402).json({
+          message: "Khong du xu de tao khoa hoc bang AI",
+          balance: err.balance ?? 0,
+          required: err.required,
+          pricing: walletService.getPricing(),
+        });
+      }
+      throw err;
+    }
+
     console.log(`[generateCourseDraft] Calling LLM to generate draft...`);
     const draftRaw = await callLLMJSON({
       system: systemPrompt,
@@ -694,6 +714,18 @@ Mục tiêu: xây lộ trình học hợp lý, bao quát kiến thức cần thi
       response: err?.response?.data,
       status: err?.status,
     });
+    if (walletCharge && !walletCharge.skipped) {
+      try {
+        await walletService.refundCharge(
+          userId,
+          walletCharge,
+          "refund_generate_course_draft_failed",
+          { error: err?.message }
+        );
+      } catch (refundErr) {
+        console.error("[generateCourseDraft] Refund error:", refundErr.message);
+      }
+    }
     return res.status(500).json({
       message: "Không tạo được bản nháp khóa học.",
       reason: err?.message || "unknown",

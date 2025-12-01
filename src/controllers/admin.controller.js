@@ -702,6 +702,56 @@ exports.updateSettings = async (req, res) => {
 };
 
 /* =========================
+   12) QUẢN LÝ VÍ - MANUAL CREDIT
+========================= */
+const walletService = require("../services/wallet.service");
+
+exports.creditUserWallet = async (req, res) => {
+  try {
+    const { userId, coins, reason } = req.body;
+
+    if (!userId || !coins || coins <= 0) {
+      return res.status(400).json({
+        message: "Vui lòng cung cấp userId và số xu hợp lệ"
+      });
+    }
+
+    // Kiểm tra user tồn tại
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({ message: "Không tìm thấy người dùng" });
+    }
+
+    // Credit xu vào ví
+    await walletService.credit(userId, Number(coins), "admin_credit", {
+      reason: reason || "Admin manual credit",
+      adminId: req.user._id
+    });
+
+    // Lấy thông tin ví sau khi credit
+    const walletData = await walletService.getWalletWithTransactions(userId, 5);
+
+    res.json({
+      message: `Đã cộng ${coins} xu vào tài khoản ${user.name || user.email}`,
+      user: {
+        id: user._id,
+        name: user.name,
+        email: user.email
+      },
+      coins: Number(coins),
+      reason: reason || "Admin manual credit",
+      wallet: walletData.wallet
+    });
+  } catch (err) {
+    console.error("[admin.creditUserWallet] Error:", err);
+    res.status(500).json({
+      message: "Lỗi khi cộng xu",
+      detail: err.message
+    });
+  }
+};
+
+/* =========================
    11) NHẬT KÝ HOẠT ĐỘNG
 ========================= */
 exports.listActivityLogs = async (req, res) => {

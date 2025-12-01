@@ -1,6 +1,7 @@
 const Practice = require("../models/Practice");
 const PracticeSubmission = require("../models/PracticeSubmission");
 const { generatePracticeQuestion, evaluatePracticeAnswer } = require("../services/practice-ai.service");
+const walletService = require("../services/wallet.service");
 
 // Lấy bài luyện tập theo bài học
 exports.getPracticeByLesson = async (req, res) => {
@@ -40,9 +41,10 @@ exports.getPracticeByLesson = async (req, res) => {
 
 // Tạo bài luyện tập mới
 exports.createPractice = async (req, res) => {
+  let walletCharge = null;
+  const userId = req.user?._id || req.user?.id;
   try {
     const { lessonId, title, lessonContent, difficulty = "medium", questionType = "open_ended" } = req.body;
-    const userId = req.user?._id || req.user?.id;
 
     if (!lessonId || !lessonContent) {
       return res.status(400).json({
@@ -54,6 +56,23 @@ exports.createPractice = async (req, res) => {
     const existingPractice = await Practice.findOne({ lessonId, isActive: true });
     if (existingPractice) {
       return res.json(existingPractice);
+    }
+
+    try {
+      walletCharge = await walletService.chargeForAction(userId, "aiPractice", {
+        lessonId,
+        difficulty,
+      });
+    } catch (err) {
+      if (err.code === "INSUFFICIENT_BALANCE") {
+        return res.status(402).json({
+          message: "Khong du xu de tao bai luyen tap bang AI",
+          balance: err.balance ?? 0,
+          required: err.required,
+          pricing: walletService.getPricing(),
+        });
+      }
+      throw err;
     }
 
     // Sử dụng AI để tạo câu hỏi luyện tập
@@ -85,6 +104,18 @@ exports.createPractice = async (req, res) => {
     res.status(201).json(practice);
   } catch (error) {
     console.error("[Practice.createPractice] Error:", error);
+    if (walletCharge && !walletCharge.skipped) {
+      try {
+        await walletService.refundCharge(
+          userId,
+          walletCharge,
+          "refund_create_practice_failed",
+          { error: error.message, lessonId }
+        );
+      } catch (refundErr) {
+        console.error("[Practice.createPractice] Refund error:", refundErr.message);
+      }
+    }
     res.status(500).json({
       message: "Lỗi khi tạo bài luyện tập"
     });
