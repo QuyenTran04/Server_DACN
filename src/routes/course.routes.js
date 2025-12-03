@@ -31,6 +31,11 @@ router.put(
   Course.updateCourse
 );
 router.get("/getCourseById/:id", middleware.requireAuth, Course.getCourseById);
+router.patch(
+  "/:id/publish",
+  middleware.requireAuth,
+  Course.publishCourse
+);
 router.delete(
   "/:id",
   middleware.requireAuth,

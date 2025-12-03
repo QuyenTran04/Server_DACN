@@ -7,6 +7,21 @@ exports.ensureWallet = async (req, res, next) => {
     req.wallet = await walletService.ensureWallet(userId);
     next();
   } catch (err) {
+    // Handle specific duplicate key error gracefully
+    if (err.code === 11000) {
+      console.log("[ensureWallet middleware] Duplicate key error, continuing with existing wallet...");
+      try {
+        // Try one more time to get the existing wallet
+        const Wallet = require("../models/Wallet");
+        const wallet = await Wallet.findOne({ user: userId });
+        if (wallet) {
+          req.wallet = wallet;
+          return next();
+        }
+      } catch (retryErr) {
+        console.error("[ensureWallet middleware] Retry failed:", retryErr);
+      }
+    }
     next(err);
   }
 };

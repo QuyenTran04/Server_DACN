@@ -32,11 +32,32 @@ function getPricing() {
 
 async function ensureWallet(userId) {
   if (!userId) throw new Error("USER_REQUIRED");
-  let wallet = await Wallet.findOne({ user: userId });
-  if (!wallet) {
-    wallet = await Wallet.create({ user: userId, balance: 0, currency: CURRENCY });
+
+  try {
+    let wallet = await Wallet.findOne({ user: userId });
+    if (!wallet) {
+      // Use findOneAndUpdate with upsert to handle race conditions
+      wallet = await Wallet.findOneAndUpdate(
+        { user: userId },
+        { balance: 0, currency: CURRENCY },
+        { upsert: true, new: true, setDefaultsOnInsert: true }
+      );
+    }
+    return wallet;
+  } catch (err) {
+    // Handle duplicate key error specifically
+    if (err.code === 11000) {
+      // If duplicate key error, try to find the wallet again
+      console.log("[ensureWallet] Duplicate key detected, retrying find...");
+      const wallet = await Wallet.findOne({ user: userId });
+      if (wallet) {
+        return wallet;
+      }
+      // If still not found, re-throw the error
+      throw new Error("Failed to create or find wallet after duplicate key error");
+    }
+    throw err;
   }
-  return wallet;
 }
 
 async function credit(userId, amount, reason = "credit", metadata = {}) {
