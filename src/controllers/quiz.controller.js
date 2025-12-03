@@ -548,12 +548,20 @@ exports.generateQuizzes = async (req, res) => {
 
     console.log(`[generateQuizzes] ✅ Created ${createdQuizzes.length} quizzes for lesson ${lessonId}`);
 
-    res.status(201).json({
+    const response = {
       message: `Đã tạo ${createdQuizzes.length} câu hỏi thành công`,
       lessonId,
       count: createdQuizzes.length,
       quizzes: createdQuizzes,
-    });
+    };
+
+    // Include wallet information if there was a charge
+    if (walletCharge && !walletCharge.skipped) {
+      response.wallet = walletCharge.wallet;
+      response.transaction = walletCharge.transaction;
+    }
+
+    res.status(201).json(response);
   } catch (err) {
     console.error("[generateQuizzes] Error:", err.message);
     if (walletCharge && !walletCharge.skipped) {

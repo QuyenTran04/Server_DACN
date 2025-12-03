@@ -101,7 +101,15 @@ exports.createPractice = async (req, res) => {
 
     await practice.save();
 
-    res.status(201).json(practice);
+    const response = practice.toObject();
+
+    // Include wallet information if there was a charge
+    if (walletCharge && !walletCharge.skipped) {
+      response.wallet = walletCharge.wallet;
+      response.transaction = walletCharge.transaction;
+    }
+
+    res.status(201).json(response);
   } catch (error) {
     console.error("[Practice.createPractice] Error:", error);
     if (walletCharge && !walletCharge.skipped) {

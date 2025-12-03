@@ -705,6 +705,12 @@ Mục tiêu: xây lộ trình học hợp lý, bao quát kiến thức cần thi
       assessedLevel, // Add the assessed level based on survey
       assessmentInsights: assessmentInsights.trim(), // Include the insights generated
     };
+    // Include wallet information if there was a charge
+    if (walletCharge && !walletCharge.skipped) {
+      result.wallet = walletCharge.wallet;
+      result.transaction = walletCharge.transaction;
+    }
+
     console.log(`[generateCourseDraft] âœ“ Success`);
     return res.json(result);
   } catch (err) {

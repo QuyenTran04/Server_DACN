@@ -151,6 +151,8 @@ exports.handleMomoWebhook = async (req, res) => {
     topUp.rawPayload = payload;
     topUp.message = payload.message;
 
+    let creditResult = null;
+
     if (Number(resultCode) === 0) {
       console.log("[wallet.handleMomoWebhook] Payment successful, processing credit");
       topUp.status = "paid";
@@ -172,7 +174,7 @@ exports.handleMomoWebhook = async (req, res) => {
         orderId
       });
 
-      const creditResult = await walletService.credit(topUp.user, topUp.coins, "topup_momo", {
+      creditResult = await walletService.credit(topUp.user, topUp.coins, "topup_momo", {
         topUpId: topUp._id,
         orderId,
         transId,
@@ -185,7 +187,16 @@ exports.handleMomoWebhook = async (req, res) => {
       await topUp.save();
     }
 
-    return res.json({ message: "ok", status: topUp.status });
+    const response = { message: "ok", status: topUp.status };
+
+    // Include wallet information if payment was successful
+    if (Number(resultCode) === 0 && creditResult) {
+      response.wallet = creditResult.wallet;
+      response.transaction = creditResult.transaction;
+      response.newBalance = creditResult.wallet.balance;
+    }
+
+    return res.json(response);
   } catch (err) {
     console.error("[wallet.handleMomoWebhook] Error:", err);
     return res.status(500).json({ message: "Webhook xu ly loi", detail: err.message });
