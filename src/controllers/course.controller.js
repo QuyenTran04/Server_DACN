@@ -145,7 +145,20 @@ exports.getMyCourses = async (req, res) => {
       .populate("instructor", "name email avatar role")
       .lean();
 
-    return res.json({ total: courses.length, items: courses });
+    // Lấy số lượng học viên cho mỗi khóa học
+    const Enrollment = require("../models/Enrollment");
+    const coursesWithEnrollment = await Promise.all(
+      courses.map(async (course) => {
+        const enrolledCount = await Enrollment.countDocuments({ course: course._id });
+        return {
+          ...course,
+          enrolledStudents: enrolledCount,
+          rating: course.avgRating ? (course.avgRating / 2).toFixed(1) : 0 // Convert 10-point to 5-point scale
+        };
+      })
+    );
+
+    return res.json({ total: coursesWithEnrollment.length, items: coursesWithEnrollment });
   } catch (err) {
     console.error("getMyCourses error:", err);
     return res
