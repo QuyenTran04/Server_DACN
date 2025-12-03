@@ -34,7 +34,7 @@ const courseSchema = new Schema(
     // Cấp độ khóa học (determined from AI assessment)
     level: {
       type: String,
-      enum: ["Beginner", "Intermediate", "Advanced"],
+      enum: ["Complete Beginner", "Upper Beginner", "Lower Intermediate", "Upper Intermediate", "Advanced", "Expert", "Beginner", "Intermediate"],
       default: "Beginner",
     },
     // Rating trung bình của khóa học (thang điểm 10)
