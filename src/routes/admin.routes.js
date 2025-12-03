@@ -19,11 +19,11 @@ router.put("/courses/:id/unpublish", admin.unpublishCourse);
 router.get("/categories", admin.listCategories);
 router.post("/categories", admin.createCategory);
 
-/* ===== 2) Giảng viên ===== */
-router.get("/instructors", admin.listInstructors);
-router.post("/instructors", admin.createInstructor);
-router.put("/instructors/:id", admin.updateInstructor);
-router.delete("/instructors/:id", admin.deleteInstructor);
+/* ===== 2) Người dùng (Creators) ===== */
+router.get("/creators", admin.listCreators);
+router.post("/users", admin.createUser);
+router.put("/users/:id", admin.updateUser);
+router.delete("/users/:id", admin.deleteUser);
 
 /* ===== 3) Học viên ===== */
 router.get("/students", admin.listStudents);

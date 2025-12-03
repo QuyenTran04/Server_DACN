@@ -166,7 +166,7 @@ exports.getCoursesByInstructor = async (req, res) => {
     if (!courses.length) {
       return res
         .status(404)
-        .json({ message: "Giảng viên chưa có khóa học nào" });
+        .json({ message: "Người dùng chưa có khóa học nào" });
     }
 
     return res.json({ total: courses.length, items: courses });

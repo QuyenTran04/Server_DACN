@@ -47,13 +47,13 @@ exports.deleteCourse = async (req, res) => {
   }
 };
 
-// Gán giảng viên
+// Gán người tạo nội dung
 exports.assignInstructor = async (req, res) => {
   try {
     const { instructorId } = req.body;
-    const inst = await User.findOne({ _id: instructorId, role: "instructor" });
+    const inst = await User.findOne({ _id: instructorId });
     if (!inst)
-      return res.status(400).json({ message: "Giảng viên không hợp lệ" });
+      return res.status(400).json({ message: "Người dùng không hợp lệ" });
     const updated = await Course.findByIdAndUpdate(
       req.params.id,
       { instructor: instructorId },
@@ -105,12 +105,12 @@ exports.listCategories = categoryCtrl.getCategories;
 exports.createCategory = categoryCtrl.createCategory;
 
 /* =========================
-   2) QUẢN LÝ GIẢNG VIÊN
+   2) QUẢN LÝ NGƯỜI TẠO NỘI DUNG
 ========================= */
-exports.listInstructors = async (req, res) => {
+exports.listCreators = async (req, res) => {
   try {
     const { skip, limit, sort, q } = buildListQuery(req);
-    const filter = { role: "instructor" };
+    const filter = { role: { $in: ["student", "admin"] } };
     if (q)
       filter.$or = [
         { name: { $regex: q, $options: "i" } },
@@ -126,34 +126,34 @@ exports.listInstructors = async (req, res) => {
   }
 };
 
-exports.createInstructor = async (req, res) => {
+exports.createUser = async (req, res) => {
   try {
-    const user = await User.create({ ...req.body, role: "instructor" });
+    const user = await User.create({ ...req.body, role: req.body.role || "student" });
     res.status(201).json(user);
   } catch (err) {
-    res.status(500).json({ message: "Tạo giảng viên thất bại" });
+    res.status(500).json({ message: "Tạo người dùng thất bại" });
   }
 };
 
-exports.updateInstructor = async (req, res) => {
+exports.updateUser = async (req, res) => {
   try {
     const user = await User.findOneAndUpdate(
-      { _id: req.params.id, role: "instructor" },
+      { _id: req.params.id },
       req.body,
       { new: true }
     );
     if (!user)
-      return res.status(404).json({ message: "Không tìm thấy giảng viên" });
+      return res.status(404).json({ message: "Không tìm thấy người dùng" });
     res.json(user);
   } catch (err) {
     res.status(500).json({ message: "Lỗi server" });
   }
 };
 
-exports.deleteInstructor = async (req, res) => {
+exports.deleteUser = async (req, res) => {
   try {
-    await User.deleteOne({ _id: req.params.id, role: "instructor" });
-    res.json({ message: "Đã xóa giảng viên" });
+    await User.deleteOne({ _id: req.params.id });
+    res.json({ message: "Đã xóa người dùng" });
   } catch (err) {
     res.status(500).json({ message: "Lỗi server" });
   }
@@ -362,7 +362,7 @@ exports.overview = async (_req, res) => {
       Course.countDocuments({}),
       Course.countDocuments({ published: true }),
       User.countDocuments({}),
-      User.countDocuments({ role: "instructor" }),
+      User.countDocuments({ role: "admin" }),
       User.countDocuments({ role: "student" }),
       Enrollment.countDocuments({ status: "active" }),
       Order.aggregate([
@@ -541,7 +541,7 @@ exports.overview = async (_req, res) => {
 ========================= */
 exports.updateUserRole = async (req, res) => {
   try {
-    const { role } = req.body; // "student" | "instructor" | "admin"
+    const { role } = req.body; // "student" | "admin"
     const user = await User.findByIdAndUpdate(
       req.params.id,
       { role },
