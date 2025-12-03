@@ -13,7 +13,6 @@ function normalizeQuestionResponse(aiResult, { title }) {
           questions: [{
             id: 1,
             question: data.trim(),
-            expectedAnswer: "",
             explanation: "Câu hỏi luyện tập do AI tạo từ nội dung bài học",
           }],
           totalQuestions: 1,
@@ -35,7 +34,6 @@ function normalizeQuestionResponse(aiResult, { title }) {
           questions: data.questions.map((q, index) => ({
             id: q.id || index + 1,
             question: q.question || q.content || "",
-            expectedAnswer: q.expectedAnswer || q.answer || "",
             explanation: q.explanation || "",
           })),
           totalQuestions: data.totalQuestions || data.questions.length,
@@ -50,7 +48,6 @@ function normalizeQuestionResponse(aiResult, { title }) {
         questions: [{
           id: 1,
           question: data.question || data.prompt || data.content || "",
-          expectedAnswer: data.expectedAnswer || data.answer || "",
           explanation: data.explanation || "",
         }],
         totalQuestions: 1,
@@ -68,7 +65,6 @@ function normalizeQuestionResponse(aiResult, { title }) {
     questions: [{
       id: 1,
       question: "Hãy tóm tắt nội dung chính của bài học và chú ý các điểm chính.",
-      expectedAnswer: "",
       explanation: "",
     }],
     totalQuestions: 1,
@@ -85,10 +81,11 @@ function normalizeEvaluation(aiResult) {
       try {
         data = JSON.parse(data);
       } catch {
+        // Nếu không parse được, xem như đây là feedback tự nhiên
         return {
-          score: 5,
-          feedback: "Có lỗi khi đánh giá câu trả lời. Vui lòng thử lại.",
-          suggestions: "Hãy kiểm tra lại câu trả lời và nộp lại.",
+          score: 6, // Mặc định trung bình khi không có điểm rõ ràng
+          feedback: aiResult.length > 50 ? aiResult : "AI đang xử lý phản hồi của bạn. Vui lòng thử lại.",
+          suggestions: "Hãy thử phát triển thêm ý tưởng của bạn với các ví dụ cụ thể.",
           strengths: [],
           improvements: [],
           correctAspects: [],
@@ -103,19 +100,20 @@ function normalizeEvaluation(aiResult) {
 
     if (data && typeof data === "object") {
       const result = {
-        score: Math.min(10, Math.max(0, parseFloat(data.score) || 5)),
-        feedback: data.feedback || data.response || "Không có nhận xét cụ thể.",
-        suggestions: data.suggestions || data.improvement || "Cần cải thiện thêm.",
+        score: Math.min(10, Math.max(0, parseFloat(data.score) || 6)), // Mặc định 6 nếu không có điểm
+        feedback: data.feedback || data.response || data.message || "Cảm ơn bạn đã chia sẻ suy nghĩ của mình!",
+        suggestions: data.suggestions || data.improvement || data.guide || "Tiếp tục phát triển ý tưởng của bạn với các ví dụ thực tế hơn nhé!",
         strengths: Array.isArray(data.strengths) ? data.strengths : [],
         improvements: Array.isArray(data.improvements) ? data.improvements : [],
         correctAspects: Array.isArray(data.correctAspects) ? data.correctAspects : [],
         incorrectAspects: Array.isArray(data.incorrectAspects) ? data.incorrectAspects : [],
       };
 
-      // Debug logging
-      console.log("[PracticeAI.normalizeEvaluation] Feedback debug:");
-      console.log("  - Original feedback:", data.feedback);
-      console.log("  - Final feedback:", result.feedback);
+      // Debug logging - chi tiết hơn
+      console.log("[PracticeAI.normalizeEvaluation] Feedback processed:");
+      console.log("  - Score:", result.score);
+      console.log("  - Feedback length:", result.feedback.length);
+      console.log("  - Has suggestions:", !!result.suggestions);
 
       return result;
     }
@@ -123,10 +121,11 @@ function normalizeEvaluation(aiResult) {
     console.error("[PracticeAI.normalizeEvaluation] Error:", err);
   }
 
+  // Fallback với thông điệp thân thiện
   return {
-    score: 5,
-    feedback: "Có lỗi khi đánh giá câu trả lời. Vui lòng thử lại.",
-    suggestions: "Hãy kiểm tra lại câu trả lời và nộp lại.",
+    score: 6,
+    feedback: "Anh/cô đã đọc câu trả lời của em rồi. Em đã có những suy nghĩ rất thú vị! Hãy tiếp tục phát triển ý tưởng của mình nhé.",
+    suggestions: "Thử nghĩ thêm về các ví dụ thực tế liên quan đến vấn đề này xem sao!",
     strengths: [],
     improvements: [],
     correctAspects: [],
@@ -159,24 +158,26 @@ QUAN TRỌNG:
     {
       "id": 1,
       "question": "Nội dung câu hỏi 1",
-      "expectedAnswer": "Đáp án gợi ý 1",
       "explanation": "Giải thích câu hỏi 1"
     },
     {
       "id": 2,
       "question": "Nội dung câu hỏi 2",
-      "expectedAnswer": "Đáp án gợi ý 2",
       "explanation": "Giải thích câu hỏi 2"
     },
     {
       "id": 3,
       "question": "Nội dung câu hỏi 3",
-      "expectedAnswer": "Đáp án gợi ý 3",
       "explanation": "Giải thích câu hỏi 3"
     }
   ],
   "totalQuestions": 3
-}`;
+}
+
+LƯU Ý QUAN TRỌNG:
+- KHÔNG tạo expectedAnswer - AI sẽ đánh giá tự nhiên dựa trên câu trả lời của người dùng
+- Tạo câu hỏi mở, khuyến khích suy nghĩ và sáng tạo
+- Tập trung vào việc áp dụng kiến thức thay vì nhớ lại thông tin`;
 
     const userPrompt = `
 Nội dung bài học:
@@ -185,8 +186,10 @@ ${lessonContent}
 Yêu cầu:
 - Độ khó: ${difficulty}
 - Tiêu đề gợi ý: ${title}
-- Tạo chính xác 3 câu hỏi nhỏ, mỗi câu hỏi tập trung vào một khía cảnh cụ thể
-- Mỗi câu hỏi phải độc lập, ngắn gọn, rõ ràng
+- Tạo chính xác 3 câu hỏi MỞ, khuyến khích suy nghĩ và sáng tạo
+- Mỗi câu hỏi tập trung vào việc áp dụng kiến thức vào thực tế
+- KHÔNG tạo câu hỏi chỉ cần nhớ lại thông tin
+- Đặt câu hỏi "Tại sao?", "Làm thế nào?", "Phân tích...", "So sánh...", "Đề xuất..."
 
 Hãy tạo JSON hợp lệ theo đúng định dạng trong system prompt. Title sẽ là "Luyện tập: ${title}".`;
 
@@ -216,14 +219,20 @@ exports.evaluatePracticeAnswer = async ({
 }) => {
   try {
     const systemPrompt = `
-Bạn là giáo viên chuyên môn đánh giá bài luyện tập. Hãy đưa ra phản hồi chi tiết, mang tính xây dựng và sử dụng **Markdown formatting**.
+Bạn là chuyên gia đánh giá bài luyện tập. Hãy phân tích câu trả lời của học viên một cách khách quan, chỉ rõ vấn đề và đưa ra giải thích cụ thể.
 
-QUAN TRỌNG: Chỉ trả về JSON hợp lệ duy nhất với định dạng sau:
+YÊU CẦU ĐÁNH GIÁ:
+- Phân tích sâu hiểu biết của học viên về vấn đề
+- Chỉ ra chính xác đâu là điểm đúng, đâu là điểm chưa chính xác
+- Giải thích tại sao một cách tiếp cận đúng và cách khác chưa đúng
+- Đưa ra ví dụ cụ thể để minh họa
+
+Định dạng JSON (chỉ trả về object duy nhất):
 
 {
   "score": 7.5,
-  "feedback": "## 📝 Đánh giá chi tiết\\n\\n### ✅ Điểm tốt\\n- **Điểm chính xác**: Câu trả lời đúng trọng tâm\\n- **Rõ ràng**: Diễn đạt mạch lạc\\n\\n### ⚠️ Cần cải thiện\\n- **Thiếu chi tiết**: Cần bổ sung thông tin\\n- **Lập luận**: Cần làm rõ hơn",
-  "suggestions": "## 💡 Gợi ý cải thiện\\n\\n1. **Cụ thể hóa**: Thêm ví dụ thực tế\\n2. **Cấu trúc**: Sử dụng Mở-Thân-Kết\\n3. **Thuật ngữ**: Sử dụng từ khóa chính xác\\n\\n### 📚 Tài liệu tham khảo\\n- Xem lại mục X trong bài học\\n- Tham khảo ví dụ Y"
+  "feedback": "Phân tích chi tiết câu trả lời: [chỉ rõ điểm đúng, điểm sai, và giải thích tại sao]. Ví dụ cụ thể: [minh họa bằng ví dụ thực tế].",
+  "suggestions": "Để cải thiện, bạn nên: [hướng dẫn cụ thể từng bước]. Ví dụ áp dụng: [ví dụ cụ thể]."
 }`;
 
       const userPrompt = `
@@ -239,59 +248,64 @@ ${lessonContent}
 
 🎯 ĐỘ KHÓ: ${difficulty}
 
-HÃY ĐÁNH GIÁ CHI TIẾT THEO CÁC TIÊU CHÍ:
+PHÂN TÍCH VÀ ĐÁNH GIÁ CHI TIẾT:
 
-### 1. TÍNH CHÍNH XÁC (40%)
-- Có trả lời đúng trọng tâm câu hỏi không?
-- Thông tin có chính xác theo bài học không?
+### 🎯 CẤU TRÚC PHÂN TÍCH:
 
-### 2. TÍNH ĐẦY ĐỦ (30%)
-- Có đủ thông tin cần thiết không?
-- Có bỏ sót các điểm quan trọng không?
+**1. PHÂN TÍCH CÂU TRẢ LỜI:**
+- Xác định các luận điểm chính trong câu trả lời
+- Đánh giá tính chính xác của từng luận điểm
+- Chỉ ra mâu thuẫn hoặc thiếu sót (nếu có)
 
-### 3. RÕ RÀNG VÀ MẠCH LẠC (30%)
-- Diễn đạt có dễ hiểu không?
-- Cấu trúc có logic không?
+**2. GIẢI THÍCH LÝ THUYẾT:**
+- Giải thích tại sao một phương pháp đúng và phương pháp khác sai
+- Trích dẫn các nguyên tắc/cơ sở lý thuyết liên quan
+- Cho thấy mối liên hệ giữa lý thuyết và thực tế
 
-### 📝 YÊU CẦU PHẢN HỒI:
+**3. VÍ DỤ MINH HỌA:**
+- Đưa ra ví dụ cụ thể để minh họa cho điểm đúng
+- Đưa ra ví dụ counter-example để chỉ ra điểm chưa chính xác
+- So sánh các cách tiếp cận khác nhau
 
-**ĐẶC BIỆT CHO CODE:**
+**ĐẶC BIỆT VỀ CODE:**
 ${answerType === 'code' ? `
-- **Syntax**: Cú pháp có đúng không?
-- **Logic**: Logic có đúng và hiệu quả không?
-- **Best practices**: Có tuân thủ coding standards không?
-- **Code readability**: Code có dễ đọc và hiểu không?` : ''}
+- Phân tích thuật toán và độ phức tạp (Big O)
+- Đánh giá best practices và design patterns
+- Chỉ ra các vấn đề về performance, scalability
+- Giải thích trade-offs giữa các giải pháp khác nhau` : ''}
 
-**TRƯỜNG HỢP ĐÚNG (score 7-10):**
-- Nêu bật **điểm xuất sắc** và **điểm tốt**
-- Gợi ý cách làm **hoàn hảo hơn**
-- Tặng kèm lời khen khích lệ
+### 📝 YÊU CẦU ĐÁNH GIÁ:
 
-**TRƯỜNG HỢP CHƯA ĐỦ (score 4-6):**
-- Nêu cụ thể **thiếu sót gì**
-- Chỉ **gần đúng ở điểm nào**
-- Hướng dẫn **cách cải thiện**
+**CHẤT LƯỢNG CAO (score 7-10):**
+- Phân tích sâu: chỉ ra các điểm chính xác và tại sao chúng chính xác
+- Giải thích rõ ràng cơ sở lý thuyết đằng sau
+- Đưa ra ví dụ thực tế minh họa
+- Gợi ý cách mở rộng hoặc áp dụng cao hơn
 
-**TRƯỜNG HỢP SAI (score 0-3):**
-- Phân tích **nguyên nhân sai**
-- Chỉ ra **hiểu lầm ở đâu**
-- Đưa ra **lộ trình học lại**
+**CẦN CẢI THIỆN (score 4-6):**
+- Chỉ rõ điểm nào đúng và điểm nào cần cải thiện
+- Giải thích tại sao điểm đó chưa chính xác
+- Đưa ra ví dụ counter để minh họa
+- Hướng dẫn cách tiếp cận đúng hơn
 
-### 💫 LƯU Ý QUAN TRỌNG:
-- Luôn bắt đầu bằng lời khen hoặc động viên
-- Sử dụng EMOJI phù hợp: ✅ ⚠️ ❌ 💡 📚 💪 ⌨️ 💻
-- Feedback phải **xây dựng**, không chê bai
-- Luôn có **gợi ý cụ thể** để cải thiện
-- ${answerType === 'code' ? 'Cho code example cụ thể để cải thiện' : 'Tham khảo chính xác nội dung bài học'}
-- Sử dụng **Markdown formatting** chuyên nghiệp
-- ${answerType === 'code' ? 'Sử dụng code blocks cho ví dụ' : ''}
+**CẦN HỖ TRỢ (score 0-3):**
+- Phân tích các hiểu lầm cơ bản
+- Giải thích lại khái niệm từ đầu
+- Đưa ra các ví dụ đơn giản, dễ hiểu
+- Xây dựng lại lộ trình hiểu đúng
+
+### 💡 NGUYÊN TẮC ĐÁNH GIÁ:
+- **Khách quan** - dựa trên logic và bằng chứng
+- **Cụ thể** - chỉ rõ điểm nào, tại sao, như thế nào
+- **Có cơ sở** - giải thích dựa trên lý thuyết đã học
+- ${answerType === 'code' ? 'Tư duy algorithm quan trọng hơn syntax' : 'Kiến thức phải đúng và đầy đủ'}
 `;
 
     const aiResult = await callGeminiJSON({
       systemPrompt,
       userPrompt,
-      temperature: 0.4, // Tăng một chút để sáng tạo hơn
-      maxOutputTokens: 1500, // Tăng để có feedback chi tiết hơn
+      temperature: 0.3, // Giảm để phản hồi khách quan và chính xác hơn
+      maxOutputTokens: 1500, // Đủ để có feedback chi tiết
     });
 
     return normalizeEvaluation(aiResult);

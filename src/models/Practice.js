@@ -4,8 +4,9 @@ const { Schema } = mongoose;
 const questionSchema = new Schema({
   id: { type: Number, required: true },
   question: { type: String, required: true },
-  expectedAnswer: { type: String },
-  explanation: { type: String }
+  // expectedAnswer kept for backward compatibility but not used in new evaluations
+  expectedAnswer: { type: String, default: "" },
+  explanation: { type: String, default: "" }
 }, { _id: false });
 
 const practiceSchema = new Schema(
@@ -29,7 +30,7 @@ const practiceSchema = new Schema(
       default: "open_ended"
     },
     lessonContent: { type: String, required: true }, // Nội dung bài học để AI tạo câu hỏi
-    expectedAnswer: { type: String }, // Câu trả lời mẫu để AI so sánh (backward compatibility)
+    expectedAnswer: { type: String, default: "" }, // Câu trả lời mẫu (backward compatibility - not used in new evaluations)
     hints: [String], // Gợi ý cho người dùng
     tags: [String], // Tags để phân loại
     isActive: { type: Boolean, default: true },

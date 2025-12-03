@@ -94,7 +94,7 @@ exports.createPractice = async (req, res) => {
       difficulty,
       questionType,
       lessonContent,
-      expectedAnswer: aiResult.expectedAnswer || (aiResult.questions?.[0]?.expectedAnswer || ""),
+      // expectedAnswer removed - AI will evaluate naturally
       hints: aiResult.hints || [],
       tags: aiResult.tags || []
     });

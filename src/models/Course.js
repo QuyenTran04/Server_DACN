@@ -155,7 +155,8 @@ async function updateCourseRating(courseId) {
 
     const ratingData = stats[0] || { avgRating: 0, totalReviews: 0 };
 
-    await Course.findByIdAndUpdate(courseId, {
+    // Sử dụng mongoose.model để tham chiếu đến Course model
+    await mongoose.model("Course").findByIdAndUpdate(courseId, {
       avgRating: Math.round(ratingData.avgRating * 10) / 10, // Làm tròn 1 chữ số thập phân
       totalReviews: ratingData.totalReviews,
     });
