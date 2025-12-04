@@ -389,7 +389,7 @@ function analyzeAssessmentLevel(assessment = {}) {
   let totalQuestions = 0;
   const insights = [];
 
-  // Universal scoring for all courses
+  // Universal scoring for all courses - based on 3 core questions
   // 1. Current level (0-5 scale) - Most important factor
   if (answers.current_level !== undefined) {
     score += answers.current_level * 2; // Weighted more heavily
@@ -403,36 +403,6 @@ function analyzeAssessmentLevel(assessment = {}) {
     score += experienceScore * 1.5; // Weighted heavily
     totalQuestions += 1.5;
     insights.push(`kinh nghiệm thực tế: ${['chưa có', 'ít', 'trung bình', 'khá', 'chuyên gia'][answers.practical_experience]}`);
-  }
-
-  // 3. Related background (0-4 scale)
-  if (answers.related_background !== undefined) {
-    const backgroundScore = (answers.related_background / 4) * 5;
-    score += backgroundScore;
-    totalQuestions += 1;
-    insights.push(`nền tảng liên quan: ${['yếu', 'trung bình', 'khá', 'tốt', 'xuất sắc'][answers.related_background]}`);
-  }
-
-  // 4. Time commitment indicator (0-4 scale) - Higher commitment can handle more advanced content
-  if (answers.time_commitment !== undefined) {
-    const commitmentBonus = (answers.time_commitment / 4) * 0.5; // Small bonus for high commitment
-    score += commitmentBonus;
-    insights.push(`cam kết thời gian: ${['thấp', 'trung bình', 'khá', 'cao', 'toàn thời gian'][answers.time_commitment]}`);
-  }
-
-  // 5. Learning preference adaptation
-  if (answers.learning_preference !== undefined) {
-    // Adjust slightly based on learning preference
-    const preferenceAdjustment = answers.learning_preference === 3 ? 0.2 : 0; // Bonus for balanced approach
-    score += preferenceAdjustment;
-    insights.push(`phong cách học: ${['lý thuyết', 'thực hành', 'case study', 'cân bằng', 'tương tác'][answers.learning_preference]}`);
-  }
-
-  // 6. Application context (0-4 scale) - Professional application gets slight boost
-  if (answers.application_context !== undefined) {
-    const contextBonus = answers.application_context >= 2 ? 0.3 : 0;
-    score += contextBonus;
-    insights.push(`mục tiêu ứng dụng: ${['cá nhân', 'công việc hiện tại', 'chuyển ngành', 'dự án', 'chuyên sâu'][answers.application_context]}`);
   }
 
   // Calculate average score
@@ -519,7 +489,7 @@ Tự động quyết định số lượng bài học để bao phủ kiến th�
       const insights = [];
       const answers = assessment.answers;
 
-      // Universal insights from new questions
+      // Universal insights from 3 core questions
       if (answers.current_level >= 4) {
         insights.push("đã có kiến thức nền tảng rất tốt");
       } else if (answers.current_level <= 1) {
@@ -530,32 +500,6 @@ Tự động quyết định số lượng bài học để bao phủ kiến th�
         insights.push("có kinh nghiệm thực tế phong phú sẵn sàng cho nội dung nâng cao");
       } else if (answers.practical_experience <= 1) {
         insights.push("cần nhiều thực hành và ví dụ cơ bản");
-      }
-
-      if (answers.related_background >= 3) {
-        insights.push("có nền tảng liên quan vững chắc");
-      } else if (answers.related_background === 0) {
-        insights.push("cần xây dựng nền tảng từ đầu");
-      }
-
-      // Time commitment insights
-      if (answers.time_commitment >= 3) {
-        insights.push("cam kết thời gian cao có thể học intensively");
-      } else if (answers.time_commitment <= 1) {
-        insights.push("thời gian có hạn nên nội dung cần cô đọng hiệu quả");
-      }
-
-      // Learning preference insights
-      const learningStyles = ["lý thuyết chi tiết", "thực hành qua dự án", "case study thực tế", "cân bằng lý thuyết-thực hành", "tương tác giải quyết vấn đề"];
-      if (answers.learning_preference !== undefined) {
-        insights.push(`ưa thích phong cách học ${learningStyles[answers.learning_preference]}`);
-      }
-
-      // Application context insights
-      if (answers.application_context >= 2) {
-        insights.push("mục tiêu chuyên nghiệp cần nội dung ứng dụng cao");
-      } else if (answers.application_context === 0) {
-        insights.push("học để mở rộng hiểu biết cần nội dung tổng quan đa dạng");
       }
 
       // Goals-based insights
@@ -578,14 +522,12 @@ Tự động quyết định số lượng bài học để bao phủ kiến th�
       if (insights.length > 0) {
         assessmentInsights = `
 🔍 **Phân tích chuyên sâu:**
-Khảo sát cho thấy người học ${insights.join(", ")}.
+Khảo sát 3 câu hỏi cho thấy người học ${insights.join(", ")}.
 
 💡 **Gợi ý cá nhân hóa:**
 • Nội dung cần được điều chỉnh theo trình độ thực tế
 • Tăng cường thực hành nếu kinh nghiệm còn hạn chế
-• Cung cấp nền tảng vững chắc nếu thiếu kiến thức liên quan
-• Điều chỉnh tốc độ và độ khó phù hợp với cam kết thời gian
-• Thiết kế lộ trình học tập theo đúng mục tiêu ứng dụng`;
+• Thiết kế lộ trình học tập theo đúng mục tiêu đã nêu`;
       }
     }
 
