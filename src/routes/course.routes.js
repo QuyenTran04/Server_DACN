@@ -2,13 +2,12 @@ const Course = require("../controllers/course.controller");
 const middleware = require("../middlewares/auth");
 const express = require("express");
 const router = express.Router();
-const upload = require("../middlewares/upload");
 
-router.post(
-  "/createCourse",
-  middleware.requireAuth,
-  upload.single("imageUrl"),
-  Course.createCourse
+// Chỉ giữ lại các route cần thiết cho việc xem khóa học
+// Đã xóa route tạo khóa học thủ công
+router.get(
+  "/getCourses",
+  Course.getCourses
 );
 router.get(
   "/my",
@@ -16,30 +15,10 @@ router.get(
   Course.getMyCourses
 );
 router.get(
-  "/getCourses",
-  Course.getCourses
-);
-router.get(
   "/getCoursesByInstructor/:instructorId",
   middleware.requireAuth,
   Course.getCoursesByInstructor
 );
-router.put(
-  "/updateCourse/:id",
-  middleware.requireAuth,
-  upload.single("imageUrl"),
-  Course.updateCourse
-);
 router.get("/getCourseById/:id", middleware.requireAuth, Course.getCourseById);
-router.patch(
-  "/:id/publish",
-  middleware.requireAuth,
-  Course.publishCourse
-);
-router.delete(
-  "/:id",
-  middleware.requireAuth,
-  Course.deleteCourse
-);
 
 module.exports = router;
