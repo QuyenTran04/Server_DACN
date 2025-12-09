@@ -18,11 +18,15 @@ router.put("/courses/:id/unpublish", admin.unpublishCourse);
 
 router.get("/categories", admin.listCategories);
 router.post("/categories", admin.createCategory);
+router.put("/categories/:id", admin.updateCategory);
+router.delete("/categories/:id", admin.deleteCategory);
 
-/* ===== 2) Người dùng (Creators) ===== */
+/* ===== 2) Người dùng ===== */
+router.get("/users", admin.listUsers);
 router.get("/creators", admin.listCreators);
 router.post("/users", admin.createUser);
 router.put("/users/:id", admin.updateUser);
+router.patch("/users/:id", admin.updateUser);
 router.delete("/users/:id", admin.deleteUser);
 
 /* ===== 3) Học viên ===== */
@@ -69,6 +73,9 @@ router.get("/settings", admin.getSettings);
 router.post("/settings", admin.updateSettings);
 
 /* ===== 11) Quản lý ví ===== */
+router.get("/wallets", admin.listWallets);
+router.get("/wallets/:userId/transactions", admin.getUserTransactions);
+router.get("/topup-transactions", admin.listTopupTransactions);
 router.post("/wallet/credit", admin.creditUserWallet);
 
 /* ===== 12) Thông báo ===== */
@@ -76,5 +83,27 @@ router.get("/notifications", admin.getNotifications);
 
 /* ===== 13) Nhật ký hoạt động ===== */
 router.get("/activity-logs", admin.listActivityLogs);
+
+/* ===== 14) Thông báo ===== */
+const announcementCtrl = require("../controllers/announcement.controller");
+router.get("/announcements", announcementCtrl.listAnnouncements);
+router.post("/announcements", announcementCtrl.createAnnouncement);
+router.put("/announcements/:id", announcementCtrl.updateAnnouncement);
+router.delete("/announcements/:id", announcementCtrl.deleteAnnouncement);
+router.patch("/announcements/:id/toggle", announcementCtrl.toggleAnnouncementStatus);
+
+/* ===== 15) Chứng chỉ ===== */
+const certificateCtrl = require("../controllers/certificate.controller");
+router.get("/certificates", certificateCtrl.listCertificates);
+router.post("/certificates", certificateCtrl.issueCertificate);
+router.put("/certificates/:id/revoke", certificateCtrl.revokeCertificate);
+router.delete("/certificates/:id", certificateCtrl.deleteCertificate);
+
+/* ===== 16) Analytics nâng cao ===== */
+router.get("/analytics/overview", admin.getAnalyticsOverview);
+router.get("/analytics/enrollments", admin.getEnrollmentAnalytics);
+router.get("/analytics/revenue", admin.getRevenueAnalytics);
+router.get("/analytics/courses", admin.getCourseAnalytics);
+router.get("/analytics/users", admin.getUserAnalytics);
 
 module.exports = router;

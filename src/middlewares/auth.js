@@ -14,8 +14,19 @@ exports.requireAuth = async (req, res, next) => {
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
     const userId = decoded.id || decoded.uid;
     if (!userId) return res.status(401).json({ message: "Token không hợp lệ" });
-    const user = await User.findById(userId).select("_id role name email");
+    const user = await User.findById(userId).select("_id role name email isActive");
     if (!user) return res.status(401).json({ message: "Token không hợp lệ" });
+
+    // Kiểm tra tài khoản có bị khóa không
+    if (user.isActive === false) {
+      return res.status(403).json({ message: "Tài khoản đã bị khóa" });
+    }
+
+    // Cập nhật trạng thái online và lastActive
+    User.findByIdAndUpdate(userId, {
+      isOnline: true,
+      lastActive: new Date(),
+    }).exec().catch(() => {}); // Fire and forget
 
     req.user = user;
     next();
