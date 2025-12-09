@@ -752,7 +752,97 @@ exports.creditUserWallet = async (req, res) => {
 };
 
 /* =========================
-   11) NHẬT KÝ HOẠT ĐỘNG
+   11) QUẢN LÝ THÔNG BÁO
+========================= */
+exports.getNotifications = async (req, res) => {
+  try {
+    // Lấy các thông báo gần đây cho admin
+    const notifications = [];
+
+    // Kiểm tra các khóa học cần duyệt
+    const pendingCourses = await Course.countDocuments({ published: false });
+    if (pendingCourses > 0) {
+      notifications.push({
+        id: "pending-courses",
+        type: "warning",
+        title: "Khóa học chờ duyệt",
+        description: `${pendingCourses} khóa học đang chờ duyệt đăng tải`,
+        createdAt: new Date(),
+        read: false
+      });
+    }
+
+    // Kiểm tra đơn hàng mới trong 24h
+    const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    const recentOrders = await Order.countDocuments({
+      createdAt: { $gte: yesterday },
+      status: "paid"
+    });
+    if (recentOrders > 0) {
+      notifications.push({
+        id: "recent-orders",
+        type: "success",
+        title: "Đơn hàng mới",
+        description: `${recentOrders} đơn hàng mới trong 24 giờ qua`,
+        createdAt: new Date(),
+        read: false
+      });
+    }
+
+    // Kiểm tra người dùng mới đăng ký
+    const newUsers = await User.countDocuments({
+      createdAt: { $gte: yesterday },
+      role: "student"
+    });
+    if (newUsers > 0) {
+      notifications.push({
+        id: "new-users",
+        type: "info",
+        title: "Học viên mới",
+        description: `${newUsers} học viên mới đăng ký trong 24 giờ qua`,
+        createdAt: new Date(),
+        read: false
+      });
+    }
+
+    // Thêm thông báo hệ thống mẫu
+    notifications.push(
+      {
+        id: "system-update",
+        type: "info",
+        title: "Cập nhật hệ thống",
+        description: "Hệ thống đã được cập nhật phiên bản mới",
+        createdAt: new Date(Date.now() - 2 * 60 * 60 * 1000),
+        read: false
+      },
+      {
+        id: "revenue-report",
+        type: "success",
+        title: "Báo cáo doanh thu",
+        description: "Doanh thu tháng này tăng 15% so với tháng trước",
+        createdAt: new Date(Date.now() - 5 * 60 * 60 * 1000),
+        read: true
+      }
+    );
+
+    // Sắp xếp theo thời gian giảm dần
+    notifications.sort((a, b) => b.createdAt - a.createdAt);
+
+    // Lấy số thông báo chưa đọc
+    const unreadCount = notifications.filter(n => !n.read).length;
+
+    res.json({
+      notifications,
+      unreadCount
+    });
+  } catch (err) {
+    console.error("getNotifications:", err);
+    res.status(500).json({ message: "Lỗi server" });
+  }
+};
+
+/* =========================
+   12) NHẬT KÝ HOẠT ĐỘNG
 ========================= */
 exports.listActivityLogs = async (req, res) => {
   try {

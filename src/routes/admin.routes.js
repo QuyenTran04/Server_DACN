@@ -71,7 +71,10 @@ router.post("/settings", admin.updateSettings);
 /* ===== 11) Quản lý ví ===== */
 router.post("/wallet/credit", admin.creditUserWallet);
 
-/* ===== 12) Nhật ký hoạt động ===== */
+/* ===== 12) Thông báo ===== */
+router.get("/notifications", admin.getNotifications);
+
+/* ===== 13) Nhật ký hoạt động ===== */
 router.get("/activity-logs", admin.listActivityLogs);
 
 module.exports = router;
