@@ -50,6 +50,7 @@ router.put("/users/:id/role", admin.updateUserRole);
 router.get("/reviews", admin.listReviews);
 router.delete("/reviews/:id", admin.deleteReview);
 router.put("/reviews/:id/hide", admin.hideReview);
+router.put("/reviews/:id/unhide", admin.unhideReview);
 
 /* ===== 8) Nội dung khoá học (reuse lesson/quiz controller) ===== */
 router.get("/courses/:courseId/lessons", admin.listLessons);

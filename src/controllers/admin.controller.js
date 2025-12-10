@@ -680,28 +680,63 @@ exports.updateUserRole = async (req, res) => {
 exports.listReviews = async (req, res) => {
   try {
     const { skip, limit, sort, q } = buildListQuery(req);
+    const { hidden, courseId } = req.query;
+    
     const filter = {};
     if (q) filter.comment = { $regex: q, $options: "i" };
-    const [items, total] = await Promise.all([
+    if (hidden !== undefined && hidden !== "") {
+      filter.hidden = hidden === "true";
+    }
+    if (courseId) filter.course = courseId;
+    
+    const [items, total, stats] = await Promise.all([
       Review.find(filter)
-        .populate("student", "name")
-        .populate("course", "title")
+        .populate("student", "name email avatar")
+        .populate("course", "title thumbnail")
         .sort(sort)
         .skip(skip)
-        .limit(limit),
+        .limit(limit)
+        .lean(),
       Review.countDocuments(filter),
+      Review.aggregate([
+        {
+          $group: {
+            _id: null,
+            totalReviews: { $sum: 1 },
+            hiddenReviews: {
+              $sum: { $cond: [{ $eq: ["$hidden", true] }, 1, 0] }
+            },
+            avgRating: { $avg: "$rating" }
+          }
+        }
+      ])
     ]);
-    res.json({ total, items, pageSize: limit });
+    
+    res.json({ 
+      total, 
+      items, 
+      pages: Math.ceil(total / limit),
+      pageSize: limit,
+      stats: stats[0] || { totalReviews: 0, hiddenReviews: 0, avgRating: 0 }
+    });
   } catch (err) {
+    console.error("listReviews:", err);
     res.status(500).json({ message: "Lỗi server" });
   }
 };
 
 exports.deleteReview = async (req, res) => {
   try {
-    await Review.findByIdAndDelete(req.params.id);
+    const review = await Review.findByIdAndDelete(req.params.id);
+    if (!review)
+      return res.status(404).json({ message: "Không tìm thấy đánh giá" });
+    
+    // Cập nhật lại rating trung bình của khóa học
+    await Course.updateRating(review.course);
+    
     res.json({ message: "Đã xóa đánh giá" });
   } catch (err) {
+    console.error("deleteReview:", err);
     res.status(500).json({ message: "Lỗi server" });
   }
 };
@@ -710,13 +745,44 @@ exports.hideReview = async (req, res) => {
   try {
     const review = await Review.findByIdAndUpdate(
       req.params.id,
-      { comment: "[hidden by admin]" },
+      { hidden: true },
       { new: true }
-    );
+    )
+      .populate("student", "name email avatar")
+      .populate("course", "title thumbnail");
+    
     if (!review)
       return res.status(404).json({ message: "Không tìm thấy đánh giá" });
-    res.json(review);
+    
+    // Cập nhật lại rating trung bình của khóa học (chỉ tính review không bị ẩn)
+    await Course.updateRating(review.course._id);
+    
+    res.json({ message: "Đã ẩn đánh giá", review });
   } catch (err) {
+    console.error("hideReview:", err);
+    res.status(500).json({ message: "Lỗi server" });
+  }
+};
+
+exports.unhideReview = async (req, res) => {
+  try {
+    const review = await Review.findByIdAndUpdate(
+      req.params.id,
+      { hidden: false },
+      { new: true }
+    )
+      .populate("student", "name email avatar")
+      .populate("course", "title thumbnail");
+    
+    if (!review)
+      return res.status(404).json({ message: "Không tìm thấy đánh giá" });
+    
+    // Cập nhật lại rating trung bình của khóa học
+    await Course.updateRating(review.course._id);
+    
+    res.json({ message: "Đã hiện đánh giá", review });
+  } catch (err) {
+    console.error("unhideReview:", err);
     res.status(500).json({ message: "Lỗi server" });
   }
 };
@@ -911,8 +977,10 @@ exports.listTopupTransactions = async (req, res) => {
     const { skip, limit, sort, q } = buildListQuery(req);
     const { status } = req.query;
     
-    const filter = { type: "credit", reason: { $regex: /topup|momo/i } };
-    if (status) filter["metadata.status"] = status;
+    const WalletTopUp = require("../models/WalletTopUp");
+    
+    const filter = {};
+    if (status) filter.status = status;
     
     if (q) {
       const users = await User.find({
@@ -925,13 +993,13 @@ exports.listTopupTransactions = async (req, res) => {
     }
     
     const [items, total] = await Promise.all([
-      WalletTransaction.find(filter)
+      WalletTopUp.find(filter)
         .populate("user", "name email avatar")
         .sort(sort || "-createdAt")
         .skip(skip)
         .limit(limit)
         .lean(),
-      WalletTransaction.countDocuments(filter),
+      WalletTopUp.countDocuments(filter),
     ]);
     
     res.json({ 
