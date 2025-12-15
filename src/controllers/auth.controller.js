@@ -120,7 +120,7 @@ exports.login = async (req, res) => {
 
     await User.updateOne(
       { _id: user._id },
-      { $set: { lastLoginAt: new Date() } }
+      { $set: { lastLoginAt: new Date(), isOnline: true, lastActive: new Date() } }
     );
 
     const token = jwt.sign(
@@ -197,6 +197,8 @@ exports.loginWithGoogle = async (req, res) => {
       // 4) Đã có user → cập nhật liên kết/thông tin cần thiết
       const update = {
         lastLoginAt: new Date(),
+        isOnline: true,
+        lastActive: new Date(),
       };
       if (!user.googleId) update.googleId = googleId;
       if (!user.provider || user.provider === "local")
@@ -254,7 +256,19 @@ exports.me = async (req, res) => {
 };
 
 // POST /api/auth/logout
-exports.logout = async (_req, res) => {
+exports.logout = async (req, res) => {
+  try {
+    // Đánh dấu user offline khi logout
+    if (req.user?._id) {
+      await User.updateOne(
+        { _id: req.user._id },
+        { isOnline: false }
+      );
+    }
+  } catch (err) {
+    console.error("Error updating online status on logout:", err);
+  }
+  
   res.clearCookie("token", {
     httpOnly: true,
     sameSite: "lax",

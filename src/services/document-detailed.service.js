@@ -5,6 +5,28 @@ const {
 
 const MIN_CONTENT_CHARS = 3000; // Đảm bảo tài liệu đầy đủ chi tiết nhưng ít nghiêm ngặt hơn
 
+/**
+ * Strip code block wrapper from content if AI accidentally wrapped entire content in code block
+ * @param {string} content - The content to clean
+ * @returns {string} - Content without code block wrapper
+ */
+function stripContentCodeBlock(content) {
+  if (!content || typeof content !== 'string') return content;
+  
+  let cleaned = content.trim();
+  
+  // Check if content starts with code block and ends with code block
+  const codeBlockPattern = /^```(?:markdown|python|javascript|java|cpp|c\+\+|html|css|json|text|plain)?\s*\n?([\s\S]*?)\n?```\s*$/i;
+  const match = cleaned.match(codeBlockPattern);
+  
+  if (match) {
+    console.log('[stripContentCodeBlock] Detected and removed code block wrapper from content');
+    cleaned = match[1].trim();
+  }
+  
+  return cleaned;
+}
+
 async function generateDetailedLessonDocument({
   lessonTitle = "",
   lessonContent = "",
@@ -41,7 +63,12 @@ TIÊU CHUAN CHẤT LƯỢNG:
 6. Có 4-5 bài tập luyện tập từ cơ bản đến nâng cao, kèm gợi ý hoặc hướng dẫn chi tiết
 7. Mỗi section phải có nội dung phong phú, không ngắn gọn
 
-Trả về JSON hợp lệ với các trường: title, content, summary, tags.`
+Trả về JSON hợp lệ với các trường: title, content, summary, tags.
+
+⚠️ QUAN TRỌNG VỀ FORMAT:
+- Field "content" phải là MARKDOWN THUẦN TÚY, KHÔNG được wrap trong code block (\`\`\`markdown hoặc \`\`\`python)
+- Chỉ dùng code block cho các đoạn CODE THỰC SỰ bên trong nội dung (ví dụ: code JavaScript, Python)
+- KHÔNG wrap toàn bộ nội dung trong một code block lớn`
         : `You are an expert educator at the ${level} level.
 Create COMPREHENSIVE, DETAILED, and PRACTICAL lesson documents.
 
@@ -54,7 +81,12 @@ Requirements:
 6. Provide 4-5 practice exercises with detailed guidance
 7. Every section must be comprehensive, not brief
 
-Return valid JSON with fields: title, content, summary, tags.`;
+Return valid JSON with fields: title, content, summary, tags.
+
+IMPORTANT FORMAT RULES:
+- Field "content" must be PLAIN MARKDOWN, NOT wrapped in code blocks (\`\`\`markdown or \`\`\`python)
+- Only use code blocks for ACTUAL CODE snippets inside the content
+- DO NOT wrap the entire content in a single large code block`;
 
     const userPrompt =
       language === "vi"
@@ -73,47 +105,58 @@ LƯU Ý QUAN TRỌNG:
 
 TỪ KHÓA BẮT BUỘC PHẢI GIẢI THÍCH: ${keyTerms.join(", ")}
 
-CẤU TRÚC BẮT BUỘC:
+CẤU TRÚC BẮT BUỘC (8 SECTIONS - PHẢI TUÂN THỦ CHÍNH XÁC):
 
-### 1. Mục tiêu học tập
-- Liệt kê 4-5 mục tiêu cụ thể học viên cần đạt được
-- Sử dụng công thức "Sau bài học này, bạn sẽ có thể..."
+### 1. Giới thiệu & Tầm quan trọng (300-400 từ)
+- "${lessonTitle}" là gì? Định nghĩa đầy đủ
+- Tại sao quan trọng trong ${courseTitle}?
+- Ứng dụng thực tế trong công việc/cuộc sống
+- Lợi ích khi nắm vững kiến thức này
 
-### 2. Kiến thức cốt lõi
-- Định nghĩa và giải thích các khái niệm chính
-- Liên hệ với kiến thức trước đó
-- Tổng hợp ý chính dưới dạng danh sách dễ nhớ
+### 2. Kiến thức nền tảng (500-700 từ)
+- Các khái niệm cơ bản cần biết trước
+- Thuật ngữ và định nghĩa chi tiết
+- Nguyên lý hoạt động cơ bản
+- Mối liên hệ với kiến thức đã học
 
-### 3. Chi tiết & Giải thích chuyên sâu
-- Mở rộng chi tiết từng khái niệm từ phần 2
-- Giải thích "tại sao" không chỉ "là gì" với ví dụ minh họa
-- Đề cập đến các trường hợp đặc biệt, ngoại lệ, và cách xử lý
-- Liên hệ lý thuyết với thực tiễn qua case study cụ thể
-- Phân tích ưu nhược điểm của mỗi phương pháp/cách tiếp cận
+### 3. Kiến thức chuyên sâu (800-1000 từ)
+- Giải thích CHI TIẾT từng khái niệm
+- Phân tích TẠI SAO và NHƯ THẾ NÀO
+- Các trường hợp đặc biệt, ngoại lệ
+- So sánh các phương pháp/cách tiếp cận khác nhau
+- Ưu điểm, nhược điểm của từng cách
 
-### 4. Quy trình / Công thức / Bước thực hiện
-- Trình bày từng bước cụ thể
-- Sử dụng thẻ code, bảng hoặc hình ảnh (markdown) nếu cần
-- Cung cấp công thức, chỉ dẫn áp dụng
-- Giải thích mỗi bước và ý nghĩa
+### 4. Quy trình thực hiện chi tiết (400-600 từ)
+- Các bước thực hiện CỤ THỂ từ A-Z
+- Công thức, thuật toán (nếu có)
+- Tips và tricks từ kinh nghiệm thực tế
+- Các lỗi thường gặp và cách tránh
+- Best practices trong ngành
 
-### 5. Ví dụ thực tiễn & Case Studies
-- Cung cấp ít nhất 5-6 ví dụ thực tế, cụ thể, có số liệu
-- Các ví dụ nên từ đơn giản đến phức tạp
-- Bao gồm cả tình huống thành công và thất bại với phân tích
-- Giải thích chi tiết cách áp dụng vào công việc thực tế
-- Mỗi ví dụ phải có bài học kinh nghiệm rõ ràng
+### 5. Ví dụ thực tế (800-1000 từ)
+- Tạo ÍT NHẤT 6 ví dụ CỤ THỂ
+- Mỗi ví dụ có: Bối cảnh, Vấn đề, Giải pháp, Kết quả, Bài học
+- Ví dụ 1-2: Cơ bản - Dễ hiểu, phù hợp người mới
+- Ví dụ 3-4: Trung bình - Phức tạp hơn
+- Ví dụ 5-6: Nâng cao - Case study thực tế
 
-### 6. Bài tập luyện tập & Thử thách
-- Tạo 5-6 bài tập từ cơ bản đến nâng cao
-- Kèm theo gợi ý hoặc hướng dẫn giải chi tiết
-- Bao gồm cả câu hỏi lý thuyết và bài tập thực hành có ví dụ cụ thể
-- Mỗi bài tập phải có mục đích học tập rõ ràng
+### 6. Ứng dụng thực tế & Tips chuyên gia (500-700 từ)
+- Cách áp dụng trong công việc/cuộc sống thực tế
+- Tips và tricks từ chuyên gia trong ngành
+- Các công cụ/tài nguyên hữu ích
+- Những sai lầm thường gặp và cách tránh
 
-### 7. Ghi nhớ & Tiếp tục học
-- Tóm tắt các điểm chính
-- Gợi ý các bài học liên quan hoặc nâng cao
-- Danh sách tài liệu tham khảo thêm
+### 7. Bài tập thực hành (600-800 từ)
+- Tạo 6 bài tập với HƯỚNG DẪN GIẢI
+- Bài 1-2: Cơ bản
+- Bài 3-4: Trung bình
+- Bài 5-6: Nâng cao
+
+### 8. Tổng kết & Lộ trình tiếp theo (300-400 từ)
+- Tóm tắt các điểm quan trọng nhất
+- Checklist kiến thức cần nắm vững
+- Các bước tiếp theo để học sâu hơn
+- Tài liệu tham khảo bổ sung
 
 Lưu ý QUAN TRỌNG:
 - Viết bằng tiếng Việt, rõ ràng và dễ hiểu
@@ -131,44 +174,58 @@ ${lessonContent || "No outline provided - create a comprehensive document based 
 
 KEY TERMS TO EXPLAIN: ${keyTerms.join(", ")}
 
-MANDATORY STRUCTURE:
+MANDATORY STRUCTURE (8 SECTIONS - MUST FOLLOW EXACTLY):
 
-### 1. Learning Objectives
-- List 4-5 specific objectives the learner should achieve
-- Use format: "After this lesson, you will be able to..."
+### 1. Introduction & Importance (300-400 words)
+- What is "${lessonTitle}"? Complete definition
+- Why is it important in ${courseTitle}?
+- Real-world applications
+- Benefits of mastering this knowledge
 
-### 2. Core Knowledge
-- Define and explain main concepts
-- Connect to previous knowledge
-- Summarize key points in easy-to-remember format
+### 2. Foundation Knowledge (500-700 words)
+- Basic concepts to know beforehand
+- Terminology and detailed definitions
+- Basic operating principles
+- Connection with previous knowledge
 
-### 3. Detailed Explanation & Deep Dive
-- Expand on each concept from section 2
-- Explain "why" not just "what"
-- Address special cases and exceptions
-- Link theory to practice
+### 3. In-Depth Knowledge (800-1000 words)
+- DETAILED explanation of each concept
+- Analysis of WHY and HOW
+- Special cases and exceptions
+- Comparison of different approaches
+- Pros and cons of each method
 
-### 4. Process / Formula / Step-by-Step Guide
-- Present procedures step by step
-- Use code blocks, tables, or diagrams (markdown) if needed
-- Provide formulas and application guidelines
-- Explain each step and its significance
+### 4. Detailed Process (400-600 words)
+- Step-by-step implementation from A-Z
+- Formulas, algorithms (if applicable)
+- Tips and tricks from real experience
+- Common mistakes and how to avoid them
+- Industry best practices
 
-### 5. Real-World Examples & Case Studies
-- Provide at least 3 concrete examples
-- Progress from simple to complex
-- Include both success and failure scenarios
-- Explain practical application
+### 5. Real Examples (800-1000 words)
+- AT LEAST 6 CONCRETE examples
+- Each example has: Context, Problem, Solution, Result, Lesson
+- Examples 1-2: Basic - Easy to understand
+- Examples 3-4: Intermediate - More complex
+- Examples 5-6: Advanced - Real case studies
 
-### 6. Practice & Challenges
-- Create 4-5 exercises from basic to advanced
-- Include hints or solution guidance
-- Mix theoretical questions and practical tasks
+### 6. Real-World Applications & Expert Tips (500-700 words)
+- How to apply in real work/life
+- Tips and tricks from industry experts
+- Useful tools/resources
+- Common mistakes and how to avoid them
 
-### 7. Key Takeaways & Next Steps
-- Summarize main points
-- Suggest related or advanced topics
-- List additional references
+### 7. Practice Exercises (600-800 words)
+- 6 exercises with DETAILED solution guides
+- Exercises 1-2: Basic
+- Exercises 3-4: Intermediate
+- Exercises 5-6: Advanced
+
+### 8. Summary & Next Steps (300-400 words)
+- Summary of key points
+- Knowledge checklist
+- Next steps for deeper learning
+- Additional references
 
 Notes:
 - Write in clear, professional English
@@ -259,7 +316,7 @@ Create an EXPANDED, DETAILED and COMPREHENSIVE document.`;
         );
         return {
           title: expansionResult.title || result.title || lessonTitle,
-          content: expansionResult.content,
+          content: stripContentCodeBlock(expansionResult.content),
           summary:
             expansionResult.summary ||
             result.summary ||
@@ -275,7 +332,7 @@ Create an EXPANDED, DETAILED and COMPREHENSIVE document.`;
 
     return {
       title: result.title || lessonTitle,
-      content: result.content || "",
+      content: stripContentCodeBlock(result.content || ""),
       summary:
         result.summary ||
         `Tài liệu chi tiết cho bài "${lessonTitle}" trong khóa "${courseTitle}"`,

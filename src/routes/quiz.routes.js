@@ -10,19 +10,16 @@ router.get("/:id", requireAuth, quizCtrl.detail);
 router.post(
   "/create",
   requireAuth,
-  requireRole("instructor", "admin"),
   quizCtrl.create
 );
 router.put(
   "/:id",
   requireAuth,
-  requireRole("instructor", "admin"),
   quizCtrl.update
 );
 router.delete(
   "/:id",
   requireAuth,
-  requireRole("instructor", "admin"),
   quizCtrl.remove
 );
 
@@ -40,7 +37,6 @@ router.post(
 router.post(
   "/import",
   requireAuth,
-  requireRole("instructor", "admin"),
   quizCtrl.importMiddleware, // upload.single('file')
   quizCtrl.importFromFile
 );
@@ -49,7 +45,6 @@ router.post(
 router.post(
   "/upload-manual",
   requireAuth,
-  requireRole("instructor", "admin"),
   quizCtrl.importMiddleware, // upload.single('file')
   quizCtrl.createManualQuiz
 );

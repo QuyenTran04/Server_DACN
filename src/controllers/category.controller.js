@@ -38,12 +38,31 @@ exports.createCategory = async (req, res) => {
 
 exports.getCategories = async (req, res) => {
   try {
-    const categories = await Category.find().sort({ createdAt: -1 });
-    return res.json(categories);
+    const page = Math.max(1, parseInt(req.query.page) || 1);
+    const limit = Math.min(100, parseInt(req.query.limit) || 20);
+    const skip = (page - 1) * limit;
+    const q = (req.query.q || "").trim();
+
+    const filter = {};
+    if (q) {
+      filter.name = { $regex: q, $options: "i" };
+    }
+
+    const [items, total] = await Promise.all([
+      Category.find(filter).sort({ createdAt: -1 }).skip(skip).limit(limit),
+      Category.countDocuments(filter),
+    ]);
+
+    return res.json({
+      items,
+      total,
+      pages: Math.ceil(total / limit),
+      pageSize: limit,
+    });
   } catch (err) {
     console.error(err);
     return res.status(500).json({ message: "Lấy danh mục thất bại" });
-    }
+  }
 };
 exports.getParentCategories = async (req, res) => {
   try {

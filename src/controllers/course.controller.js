@@ -145,7 +145,20 @@ exports.getMyCourses = async (req, res) => {
       .populate("instructor", "name email avatar role")
       .lean();
 
-    return res.json({ total: courses.length, items: courses });
+    // Lấy số lượng học viên cho mỗi khóa học
+    const Enrollment = require("../models/Enrollment");
+    const coursesWithEnrollment = await Promise.all(
+      courses.map(async (course) => {
+        const enrolledCount = await Enrollment.countDocuments({ course: course._id });
+        return {
+          ...course,
+          enrolledStudents: enrolledCount,
+          rating: course.avgRating ? (course.avgRating / 2).toFixed(1) : 0 // Convert 10-point to 5-point scale
+        };
+      })
+    );
+
+    return res.json({ total: coursesWithEnrollment.length, items: coursesWithEnrollment });
   } catch (err) {
     console.error("getMyCourses error:", err);
     return res
@@ -166,7 +179,7 @@ exports.getCoursesByInstructor = async (req, res) => {
     if (!courses.length) {
       return res
         .status(404)
-        .json({ message: "Giảng viên chưa có khóa học nào" });
+        .json({ message: "Người dùng chưa có khóa học nào" });
     }
 
     return res.json({ total: courses.length, items: courses });
@@ -246,6 +259,49 @@ exports.updateCourse = async (req, res) => {
   } catch (err) {
     console.error("updateCourse error:", err);
     return res.status(500).json({ message: "Cập nhật khóa học thất bại" });
+  }
+};
+
+exports.publishCourse = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const instructor = req.user?.id || req.user?._id;
+
+    if (!instructor) {
+      return res.status(401).json({ message: "Chưa đăng nhập" });
+    }
+
+    const course = await Course.findById(id);
+    if (!course) {
+      return res.status(404).json({ message: "Khóa học không tồn tại" });
+    }
+
+    if (String(course.instructor) !== String(instructor) && req.user?.role !== "admin") {
+      return res.status(403).json({ message: "Bạn không có quyền công khai khóa học này" });
+    }
+
+    if (course.published) {
+      return res.status(400).json({ message: "Khóa học này đã được công khai rồi" });
+    }
+
+    // Check if course has minimum requirements
+    if (!course.title || !course.description || !course.category) {
+      return res.status(400).json({
+        message: "Khóa học cần có tiêu đề, mô tả và danh mục trước khi công khai"
+      });
+    }
+
+    course.published = true;
+    course.publishedAt = new Date();
+    await course.save();
+
+    return res.json({
+      message: "Khóa học đã được công khai thành công",
+      course: course
+    });
+  } catch (err) {
+    console.error("publishCourse error:", err);
+    return res.status(500).json({ message: "Công khai khóa học thất bại" });
   }
 };
 

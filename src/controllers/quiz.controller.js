@@ -10,6 +10,7 @@ const {
   textFromImageBuffer,
 } = require("../services/ocr.service");
 const ai = require("../services/gemini.service"); // unified (gpt/gemini tuỳ AI_PROVIDER)
+const walletService = require("../services/wallet.service");
 
 // -------- CRUD --------
 exports.list = async (req, res) => {
@@ -453,9 +454,10 @@ exports.forLessonToTake = async (req, res) => {
 
 // 🎯 Generate quizzes on-demand
 exports.generateQuizzes = async (req, res) => {
+  let walletCharge = null;
+  const userId = req.user?._id || req.user?.id;
   try {
     const { lessonId, questionCount = 5 } = req.body;
-    const userId = req.user?._id || req.user?.id;
     
     if (!userId) {
       return res.status(401).json({ message: "Bạn chưa đăng nhập" });
@@ -494,6 +496,23 @@ exports.generateQuizzes = async (req, res) => {
       });
     }
 
+    try {
+      walletCharge = await walletService.chargeForAction(userId, "aiQuiz", {
+        lessonId,
+        numQuestions,
+      });
+    } catch (err) {
+      if (err.code === "INSUFFICIENT_BALANCE") {
+        return res.status(402).json({
+          message: "Khong du xu de tao quiz bang AI",
+          balance: err.balance ?? 0,
+          required: err.required,
+          pricing: walletService.getPricing(),
+        });
+      }
+      throw err;
+    }
+
     // Import helper functions
     const { generateExtraQuizItems } = require('./aiCourse.controller');
     const { indexByLetter } = require('../utils/quiz-normalize');
@@ -529,14 +548,34 @@ exports.generateQuizzes = async (req, res) => {
 
     console.log(`[generateQuizzes] ✅ Created ${createdQuizzes.length} quizzes for lesson ${lessonId}`);
 
-    res.status(201).json({
+    const response = {
       message: `Đã tạo ${createdQuizzes.length} câu hỏi thành công`,
       lessonId,
       count: createdQuizzes.length,
       quizzes: createdQuizzes,
-    });
+    };
+
+    // Include wallet information if there was a charge
+    if (walletCharge && !walletCharge.skipped) {
+      response.wallet = walletCharge.wallet;
+      response.transaction = walletCharge.transaction;
+    }
+
+    res.status(201).json(response);
   } catch (err) {
     console.error("[generateQuizzes] Error:", err.message);
+    if (walletCharge && !walletCharge.skipped) {
+      try {
+        await walletService.refundCharge(
+          userId,
+          walletCharge,
+          "refund_generate_quizzes_failed",
+          { error: err.message, lessonId }
+        );
+      } catch (refundErr) {
+        console.error("[generateQuizzes] Refund error:", refundErr.message);
+      }
+    }
     res.status(500).json({ message: err.message });
   }
 };

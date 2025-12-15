@@ -15,7 +15,7 @@ const userSchema = new mongoose.Schema(
 
     role: {
       type: String,
-      enum: ["student", "instructor", "admin"],
+      enum: ["student", "admin"],
       default: "student",
     },
 
@@ -26,6 +26,8 @@ const userSchema = new mongoose.Schema(
     emailVerified: { type: Boolean, default: false },
 
     lastLoginAt: { type: Date },
+    lastActive: { type: Date, default: Date.now },
+    isOnline: { type: Boolean, default: false },
     bio: String,
     isActive: { type: Boolean, default: true },
   },
