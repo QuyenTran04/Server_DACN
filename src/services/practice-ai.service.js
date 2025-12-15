@@ -167,53 +167,51 @@ exports.generatePracticeQuestion = async ({
   title = "Luyện tập",
 }) => {
   try {
-    // Map mức độ sang hướng dẫn cụ thể cho AI
+    // Map mức độ sang hướng dẫn cụ thể cho AI - TẬP TRUNG VÀO CÂU HỎI VẬN DỤNG
     const difficultyGuide = {
       "Dễ": {
-        description: "Câu hỏi cơ bản, kiểm tra hiểu biết về khái niệm chính",
-        examples: "Giải thích khái niệm X là gì? Liệt kê các bước thực hiện Y? Mô tả đặc điểm của Z?",
-        focus: "Nhớ lại và hiểu khái niệm cơ bản từ bài học"
+        description: "Câu hỏi VẬN DỤNG cơ bản - áp dụng kiến thức vào tình huống đơn giản",
+        examples: "Cho tình huống X, hãy áp dụng kiến thức Y để giải quyết? Viết code/thực hiện Z theo yêu cầu cụ thể? Với dữ liệu A, hãy tính toán/xử lý để ra kết quả B?",
+        focus: "Vận dụng kiến thức cơ bản vào bài tập thực hành đơn giản, có hướng dẫn rõ ràng"
       },
       "Trung bình": {
-        description: "Câu hỏi yêu cầu áp dụng kiến thức vào tình huống cụ thể",
-        examples: "Làm thế nào để áp dụng X trong tình huống Y? So sánh A và B? Phân tích ưu nhược điểm của Z?",
-        focus: "Áp dụng và phân tích kiến thức từ bài học"
+        description: "Câu hỏi VẬN DỤNG nâng cao - giải quyết vấn đề thực tế với nhiều bước",
+        examples: "Xây dựng chức năng X với các yêu cầu cụ thể? Cho bài toán thực tế Y, hãy thiết kế giải pháp? Tối ưu hóa đoạn code/quy trình Z để đạt hiệu quả cao hơn?",
+        focus: "Vận dụng kiến thức để giải quyết bài toán thực tế, yêu cầu tư duy logic và kết hợp nhiều khái niệm"
       },
       "Khó": {
-        description: "Câu hỏi yêu cầu tư duy phản biện và giải quyết vấn đề phức tạp",
-        examples: "Đánh giá hiệu quả của phương pháp X trong trường hợp Y? Đề xuất giải pháp cho vấn đề Z? Tại sao A lại quan trọng hơn B trong ngữ cảnh C?",
-        focus: "Phân tích sâu, đánh giá và đề xuất giải pháp"
+        description: "Câu hỏi VẬN DỤNG phức tạp - thiết kế và giải quyết vấn đề đa chiều",
+        examples: "Thiết kế hệ thống X đáp ứng các yêu cầu phức tạp? Phân tích và đề xuất giải pháp cho vấn đề Y trong ngữ cảnh thực tế? Debug và cải tiến code/quy trình Z có nhiều lỗi tiềm ẩn?",
+        focus: "Vận dụng sáng tạo, phân tích vấn đề từ nhiều góc độ, đề xuất giải pháp tối ưu"
       },
       "Rất Khó": {
-        description: "Câu hỏi yêu cầu tổng hợp kiến thức, sáng tạo và tư duy cấp cao",
-        examples: "Thiết kế một hệ thống/giải pháp hoàn chỉnh cho vấn đề X? Phân tích và so sánh nhiều phương pháp khác nhau? Đề xuất cải tiến cho Y dựa trên nguyên lý Z?",
-        focus: "Tổng hợp, sáng tạo và tư duy hệ thống"
+        description: "Câu hỏi VẬN DỤNG cấp cao - tổng hợp và sáng tạo giải pháp hoàn chỉnh",
+        examples: "Thiết kế kiến trúc hoàn chỉnh cho hệ thống X với các ràng buộc phức tạp? Xây dựng giải pháp end-to-end cho bài toán Y? Đánh giá và cải tiến toàn diện hệ thống Z?",
+        focus: "Tổng hợp tất cả kiến thức, tư duy hệ thống, sáng tạo giải pháp mới và đánh giá trade-offs"
       }
     };
 
     const guide = difficultyGuide[difficulty] || difficultyGuide["Trung bình"];
 
     const systemPrompt = `
-Bạn là giáo viên tạo bài luyện tập cho học viên. Chỉ trả về JSON hợp lệ, không kèm giải thích.
+Bạn là giáo viên tạo bài luyện tập VẬN DỤNG cho học viên. Chỉ trả về JSON hợp lệ, không kèm giải thích.
 
-QUAN TRỌNG - TẠO CÂU HỎI BÁM SÁT NỘI DUNG BÀI HỌC:
-- Câu hỏi PHẢI dựa trên nội dung CỤ THỂ trong bài học
-- KHÔNG tạo câu hỏi chung chung không liên quan đến bài học
-- Trích dẫn các khái niệm, ví dụ, thuật ngữ CHÍNH XÁC từ bài học
-- Câu hỏi phải giúp học viên ôn tập và hiểu sâu nội dung đã học
+🎯 QUAN TRỌNG - CHỈ TẠO CÂU HỎI VẬN DỤNG (KHÔNG PHẢI LÝ THUYẾT):
+- Câu hỏi VẬN DỤNG = yêu cầu học viên THỰC HÀNH, GIẢI BÀI TẬP, VIẾT CODE, TÍNH TOÁN
+- KHÔNG hỏi "X là gì?", "Giải thích Y?", "Liệt kê Z?" - đây là câu hỏi lý thuyết
+- PHẢI hỏi "Cho tình huống X, hãy làm Y?", "Viết code để Z?", "Giải bài toán A?"
 
-ĐỂ TẠO CÂU HỎI TỐT:
-1. Đọc kỹ toàn bộ nội dung bài học
-2. Xác định các khái niệm chính, ví dụ cụ thể, và thuật ngữ quan trọng
-3. Tạo câu hỏi yêu cầu học viên PHẢI dựa vào nội dung bài học để trả lời
-4. Sử dụng chính xác các thuật ngữ, ví dụ trong bài học
-5. Tránh các câu hỏi có thể trả lời bằng kiến thức chung
+📝 LOẠI CÂU HỎI VẬN DỤNG CẦN TẠO:
+1. BÀI TẬP THỰC HÀNH: Cho dữ liệu/tình huống cụ thể, yêu cầu giải quyết
+2. VIẾT CODE/CÔNG THỨC: Yêu cầu viết code, công thức, thuật toán
+3. TÍNH TOÁN/XỬ LÝ: Cho input, yêu cầu tính output theo kiến thức đã học
+4. THIẾT KẾ/XÂY DỰNG: Yêu cầu thiết kế giải pháp cho vấn đề cụ thể
+5. DEBUG/TỐI ƯU: Cho code/quy trình có lỗi, yêu cầu sửa và cải tiến
 
-MỨC ĐỘ: ${difficulty}
+MỨC ĐỘ VẬN DỤNG: ${difficulty}
 - Mô tả: ${guide.description}
 - Ví dụ: ${guide.examples}
 - Tập trung: ${guide.focus}
-- CHỈ SỬ DỤNG CÁC MỨC ĐỘ: "Dễ", "Trung bình", "Khó", "Rất Khó"
 
 Định dạng BẮT BUỘC:
 {
@@ -221,58 +219,67 @@ MỨC ĐỘ: ${difficulty}
   "questions": [
     {
       "id": 1,
-      "question": "Nội dung câu hỏi 1 BÁM SÁT bài học",
-      "explanation": "Giải thích câu hỏi 1 và liên hệ với nội dung bài học"
+      "question": "Câu hỏi VẬN DỤNG 1 - yêu cầu thực hành/giải bài tập",
+      "explanation": "Kiến thức cần vận dụng từ bài học"
     },
     {
       "id": 2,
-      "question": "Nội dung câu hỏi 2 BÁM SÁT bài học",
-      "explanation": "Giải thích câu hỏi 2 và liên hệ với nội dung bài học"
+      "question": "Câu hỏi VẬN DỤNG 2 - yêu cầu thực hành/giải bài tập",
+      "explanation": "Kiến thức cần vận dụng từ bài học"
     },
     {
       "id": 3,
-      "question": "Nội dung câu hỏi 3 BÁM SÁT bài học",
-      "explanation": "Giải thích câu hỏi 3 và liên hệ với nội dung bài học"
+      "question": "Câu hỏi VẬN DỤNG 3 - yêu cầu thực hành/giải bài tập",
+      "explanation": "Kiến thức cần vận dụng từ bài học"
     }
   ],
   "totalQuestions": 3,
-  "hints": ["Gợi ý 1 liên quan đến bài học", "Gợi ý 2 liên quan đến bài học"],
-  "tags": ["tag1", "tag2"]
+  "hints": ["Gợi ý thực hành 1", "Gợi ý thực hành 2"],
+  "tags": ["practice", "application"]
 }
 
-QUY TẮC TẠO CÂU HỎI:
-✅ Sử dụng thuật ngữ, khái niệm CỤ THỂ từ bài học
-✅ Tham chiếu đến ví dụ, tình huống trong bài học
-✅ Yêu cầu áp dụng kiến thức đã học vào tình huống mới
-✅ Phù hợp với mức độ ${difficulty}
-✅ Mức độ phải là một trong: "Dễ", "Trung bình", "Khó", "Rất Khó"
+✅ CÂU HỎI VẬN DỤNG TỐT:
+- "Cho mảng [1,2,3,4,5], viết code để tính tổng các phần tử chẵn"
+- "Thiết kế database schema cho hệ thống quản lý thư viện với các yêu cầu..."
+- "Cho đoạn code sau có bug, hãy tìm và sửa lỗi: ..."
+- "Xây dựng API endpoint để xử lý yêu cầu X với các validation..."
+- "Tính toán độ phức tạp của thuật toán sau và đề xuất cách tối ưu..."
 
-❌ KHÔNG tạo câu hỏi chung chung
-❌ KHÔNG hỏi về kiến thức ngoài bài học
-❌ KHÔNG sử dụng "easy", "medium", "hard" - chỉ dùng tiếng Việt
-❌ KHÔNG tạo expectedAnswer - AI sẽ đánh giá tự nhiên`;
+❌ CÂU HỎI LÝ THUYẾT (KHÔNG TẠO):
+- "React là gì?"
+- "Giải thích khái niệm useState?"
+- "Liệt kê các lifecycle methods?"
+- "Mô tả cách hoạt động của X?"
+- "So sánh A và B?" (nếu không có bài tập kèm theo)`;
 
     const userPrompt = `
 📚 NỘI DUNG BÀI HỌC:
 ${lessonContent}
 
-🎯 YÊU CẦU:
+🎯 YÊU CẦU TẠO CÂU HỎI VẬN DỤNG:
 - Mức độ: ${difficulty} (${guide.description})
 - Tiêu đề: ${title}
-- Tạo chính xác 3 câu hỏi BÁM SÁT nội dung bài học trên
-- Mỗi câu hỏi phải tham chiếu đến khái niệm/ví dụ CỤ THỂ trong bài học
-- Độ khó phù hợp với mức ${difficulty}
+- Tạo chính xác 3 CÂU HỎI VẬN DỤNG dựa trên nội dung bài học
+- Mỗi câu hỏi PHẢI yêu cầu học viên THỰC HÀNH, GIẢI BÀI TẬP, VIẾT CODE hoặc TÍNH TOÁN
+- KHÔNG tạo câu hỏi lý thuyết như "X là gì?", "Giải thích Y?"
 
 💡 HƯỚNG DẪN CHO MỨC ${difficulty}:
 ${guide.focus}
 
-Ví dụ câu hỏi: ${guide.examples}
+📝 VÍ DỤ CÂU HỎI VẬN DỤNG: ${guide.examples}
 
-QUY TẮC QUAN TRỌNG:
-- PHẢI đọc kỹ toàn bộ nội dung bài học trước khi tạo câu hỏi
-- Tạo câu hỏi về các khái niệm, ví dụ, code example CÓ TRONG BÀI HỌC
-- KHÔNG tạo câu hỏi về kiến thức chung
-- Mỗi câu hỏi phải YÊU CẦU học viên DỰA VÀO NỘI DUNG BÀI HỌC để trả lời
+🔥 QUY TẮC BẮT BUỘC:
+1. Đọc kỹ nội dung bài học và xác định các kỹ năng/kiến thức có thể thực hành
+2. Tạo TÌNH HUỐNG/BÀI TOÁN cụ thể để học viên áp dụng kiến thức
+3. Câu hỏi phải có INPUT rõ ràng (dữ liệu, yêu cầu, ràng buộc)
+4. Câu hỏi phải yêu cầu OUTPUT cụ thể (code, kết quả, giải pháp)
+5. Độ khó phù hợp với mức ${difficulty}
+
+❌ TUYỆT ĐỐI KHÔNG TẠO:
+- Câu hỏi định nghĩa: "X là gì?"
+- Câu hỏi giải thích: "Giải thích cách hoạt động của Y?"
+- Câu hỏi liệt kê: "Liệt kê các đặc điểm của Z?"
+- Câu hỏi so sánh thuần túy: "So sánh A và B?" (không có bài tập)
 
 Hãy tạo JSON hợp lệ theo đúng định dạng. Title sẽ là "Luyện tập: ${title}".`;
 
@@ -416,7 +423,7 @@ ${answerType === 'code' ? `
 // Xuất hàm normalizeDifficulty để sử dụng ở controller
 exports.normalizeDifficulty = normalizeDifficulty;
 
-// Lấy lịch sử và điều chỉnh mức độ dựa trên kết quả trước đó
+// Lấy lịch sử và điều chỉnh mức độ dựa trên ĐIỂM TRUNG BÌNH của bài luyện tập gần nhất
 exports.getRecommendedDifficulty = async ({ userId, lessonId }) => {
   try {
     // Lấy tất cả các bài nộp của user trong bài học này
@@ -435,19 +442,64 @@ exports.getRecommendedDifficulty = async ({ userId, lessonId }) => {
         lastDifficulty: null,
         message: "Bài luyện tập đầu tiên sẽ ở mức độ Trung bình",
         totalSubmissions: 0,
+        totalPractices: 0,
         averageScore: 0
       };
     }
 
-    // Lấy bài nộp gần nhất
-    const lastSubmission = submissions[0];
-    const lastScore = lastSubmission.feedback?.score || 0;
-    const lastDifficulty = lastSubmission.practiceId?.difficulty || "Trung bình";
+    // Group submissions theo practiceId để tính điểm trung bình cho mỗi bài luyện tập
+    const practiceMap = new Map();
+    
+    for (const submission of submissions) {
+      const practiceId = submission.practiceId?._id?.toString();
+      if (!practiceId) continue;
 
-    // Tính điểm trung bình của tất cả các bài đã nộp
-    const averageScore = submissions.reduce((sum, sub) => sum + (sub.feedback?.score || 0), 0) / submissions.length;
+      if (!practiceMap.has(practiceId)) {
+        practiceMap.set(practiceId, {
+          practice: submission.practiceId,
+          submissions: [],
+          totalScore: 0,
+          totalQuestions: 0,
+          lastSubmittedAt: submission.submittedAt
+        });
+      }
 
-    // Điều chỉnh mức độ dựa trên điểm gần nhất
+      const practiceData = practiceMap.get(practiceId);
+      practiceData.submissions.push(submission);
+      practiceData.totalScore += submission.feedback?.score || 0;
+      practiceData.totalQuestions += 1;
+      
+      // Cập nhật thời gian nộp bài gần nhất
+      if (submission.submittedAt > practiceData.lastSubmittedAt) {
+        practiceData.lastSubmittedAt = submission.submittedAt;
+      }
+    }
+
+    // Chuyển thành mảng và tính điểm trung bình cho mỗi bài
+    const practiceList = Array.from(practiceMap.values()).map(data => ({
+      practiceId: data.practice._id,
+      difficulty: data.practice.difficulty,
+      averageScore: data.totalQuestions > 0 
+        ? Math.round((data.totalScore / data.totalQuestions) * 10) / 10 
+        : 0,
+      totalQuestions: data.totalQuestions,
+      lastSubmittedAt: data.lastSubmittedAt
+    }));
+
+    // Sắp xếp theo thời gian nộp bài gần nhất
+    practiceList.sort((a, b) => new Date(b.lastSubmittedAt) - new Date(a.lastSubmittedAt));
+
+    // Lấy bài luyện tập gần nhất và điểm trung bình của nó
+    const lastPractice = practiceList[0];
+    const lastScore = lastPractice.averageScore; // Điểm TRUNG BÌNH của bài luyện tập gần nhất
+    const lastDifficulty = lastPractice.difficulty || "Trung bình";
+
+    // Tính điểm trung bình tổng thể của tất cả các bài
+    const overallAverageScore = practiceList.length > 0
+      ? practiceList.reduce((sum, p) => sum + p.averageScore, 0) / practiceList.length
+      : 0;
+
+    // Điều chỉnh mức độ dựa trên điểm TRUNG BÌNH của bài luyện tập gần nhất
     const difficultyLevels = ["Dễ", "Trung bình", "Khó", "Rất Khó"];
     const currentIndex = difficultyLevels.indexOf(lastDifficulty);
 
@@ -463,25 +515,27 @@ exports.getRecommendedDifficulty = async ({ userId, lessonId }) => {
 
     let message = "";
     if (lastScore > 8) {
-      message = `Xuất sắc! Điểm ${lastScore}/10 → Tăng lên mức độ ${nextDifficulty}`;
+      message = `Xuất sắc! Điểm TB bài gần nhất: ${lastScore}/10 → Tăng lên mức độ ${nextDifficulty}`;
     } else if (lastScore < 5) {
-      message = `Điểm ${lastScore}/10 → Giảm xuống mức độ ${nextDifficulty} để ôn tập`;
+      message = `Điểm TB bài gần nhất: ${lastScore}/10 → Giảm xuống mức độ ${nextDifficulty} để ôn tập`;
     } else {
-      message = `Điểm ${lastScore}/10 → Giữ nguyên mức độ ${nextDifficulty}`;
+      message = `Điểm TB bài gần nhất: ${lastScore}/10 → Giữ nguyên mức độ ${nextDifficulty}`;
     }
 
     return {
       nextDifficulty,
-      lastScore,
+      lastScore, // Điểm TRUNG BÌNH của bài luyện tập gần nhất
       lastDifficulty,
+      lastPracticeQuestions: lastPractice.totalQuestions, // Số câu hỏi trong bài gần nhất
       message,
       totalSubmissions: submissions.length,
-      averageScore: Math.round(averageScore * 10) / 10, // Làm tròn 1 chữ số thập phân
+      totalPractices: practiceList.length,
+      averageScore: Math.round(overallAverageScore * 10) / 10,
       difficultyLevels,
       scoringRules: {
-        increase: "Điểm > 8/10 → Tăng 1 mức",
-        maintain: "Điểm 5-8/10 → Giữ nguyên",
-        decrease: "Điểm < 5/10 → Giảm 1 mức"
+        increase: "Điểm TB > 8/10 → Tăng 1 mức",
+        maintain: "Điểm TB 5-8/10 → Giữ nguyên",
+        decrease: "Điểm TB < 5/10 → Giảm 1 mức"
       }
     };
   } catch (error) {
@@ -492,6 +546,7 @@ exports.getRecommendedDifficulty = async ({ userId, lessonId }) => {
       lastDifficulty: null,
       message: "Lỗi khi lấy thông tin, sử dụng mức độ mặc định",
       totalSubmissions: 0,
+      totalPractices: 0,
       averageScore: 0
     };
   }

@@ -27,14 +27,45 @@ router.get("/history/:userId/:lessonId", getPracticeHistory);
 router.get("/:id", async (req, res) => {
   try {
     const { id } = req.params;
+    const userId = req.user?._id || req.user?.id;
     const Practice = require("../models/Practice");
+    const PracticeSubmission = require("../models/PracticeSubmission");
+    
     const practice = await Practice.findById(id).populate('lessonId courseId');
     
     if (!practice) {
       return res.status(404).json({ message: "Không tìm thấy bài luyện tập" });
     }
+
+    // Kiểm tra xem user đã hoàn thành bài này chưa
+    const userSubmissions = await PracticeSubmission.find({
+      practiceId: id,
+      userId
+    }).sort({ submittedAt: -1 });
+
+    // Tính số câu đã trả lời và điểm trung bình
+    const totalQuestionsAnswered = userSubmissions.length;
+    const totalQuestionsInPractice = practice.questions?.length || 1;
+    const isCompleted = totalQuestionsAnswered >= totalQuestionsInPractice;
     
-    res.json({ practice });
+    const averageScore = totalQuestionsAnswered > 0
+      ? Math.round((userSubmissions.reduce((sum, s) => sum + (s.feedback?.score || 0), 0) / totalQuestionsAnswered) * 10) / 10
+      : 0;
+
+    const correctCount = userSubmissions.filter(s => s.isCorrect).length;
+    
+    res.json({ 
+      practice,
+      userProgress: {
+        isCompleted,
+        totalQuestionsAnswered,
+        totalQuestionsInPractice,
+        averageScore,
+        correctCount,
+        incorrectCount: totalQuestionsAnswered - correctCount,
+        submissions: userSubmissions
+      }
+    });
   } catch (error) {
     console.error("[Practice.getById] Error:", error);
     res.status(500).json({ message: "Lỗi khi lấy bài luyện tập" });

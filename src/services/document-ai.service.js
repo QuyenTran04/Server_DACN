@@ -15,20 +15,24 @@ const MAX_CONTEXT_CHARS = 3200;
 const MAX_DOC_ATTEMPTS = 3;
 const DOC_SECTIONS = {
   vi: [
-    "## Mục tiêu học tập",
-    "## Kiến thức cốt lõi",
-    "## Quy trình / Công thức",
-    "## Ví dụ thực tiễn",
-    "## Bài tập luyện tập",
-    "## Ghi nhớ & tiếp tục học",
+    "## 1. Giới thiệu & Tầm quan trọng",
+    "## 2. Kiến thức nền tảng",
+    "## 3. Kiến thức chuyên sâu",
+    "## 4. Quy trình thực hiện chi tiết",
+    "## 5. Ví dụ thực tế",
+    "## 6. Ứng dụng thực tế & Tips chuyên gia",
+    "## 7. Bài tập thực hành",
+    "## 8. Tổng kết & Lộ trình tiếp theo",
   ],
   en: [
-    "## Learning Objectives",
-    "## Core Knowledge",
-    "## Process / Formula",
-    "## Practical Examples",
-    "## Practice & Challenges",
-    "## Key Takeaways & Next Steps",
+    "## 1. Introduction & Importance",
+    "## 2. Foundation Knowledge",
+    "## 3. In-Depth Knowledge",
+    "## 4. Detailed Process",
+    "## 5. Real Examples",
+    "## 6. Real-World Applications & Expert Tips",
+    "## 7. Practice Exercises",
+    "## 8. Summary & Next Steps",
   ],
 };
 
@@ -58,8 +62,8 @@ function sanitizeTags(rawTags = [], fallbackTerms = [], lessonTitle = "") {
 function hasRequiredStructure(content = "") {
   if (!content) return false;
   const headingMatches = content.match(/(^|\n)##\s+/g) || [];
-  // Giảm yêu cầu xuống 3 sections để ít nghiêm ngặt hơn
-  return headingMatches.length >= 3;
+  // Yêu cầu ít nhất 6 sections (cho phép thiếu 2 sections)
+  return headingMatches.length >= 6;
 }
 
 function coversKeyTerms(content = "", keyTerms = []) {
@@ -72,10 +76,20 @@ function buildSystemPrompt(language = "vi", level = "Beginner") {
   if (language === "vi") {
     return `Bạn là chuyên gia thiết kế tài liệu học tập cấp ${level}.
 Tạo tài liệu chi tiết gắn với nội dung bài học, dùng markdown và giải thích dễ hiểu.
-Trả về JSON hợp lệ với các trường yêu cầu.`;
+Trả về JSON hợp lệ với các trường yêu cầu.
+
+⚠️ QUAN TRỌNG VỀ FORMAT:
+- Field "content" phải là MARKDOWN THUẦN TÚY, KHÔNG được wrap trong code block (\`\`\`markdown hoặc \`\`\`python)
+- Chỉ dùng code block cho các đoạn CODE THỰC SỰ bên trong nội dung
+- KHÔNG wrap toàn bộ nội dung trong một code block lớn`;
   }
   return `You are an instructional designer building ${level} lesson documents.
-Return comprehensive markdown content tightly aligned to the lesson, strictly as valid JSON.`;
+Return comprehensive markdown content tightly aligned to the lesson, strictly as valid JSON.
+
+IMPORTANT FORMAT RULES:
+- Field "content" must be PLAIN MARKDOWN, NOT wrapped in code blocks (\`\`\`markdown or \`\`\`python)
+- Only use code blocks for ACTUAL CODE snippets inside the content
+- DO NOT wrap the entire content in a single large code block`;
 }
 
 function buildUserPrompt(context) {
@@ -136,6 +150,29 @@ Requirements:
   return language === "vi" ? baseVi : baseEn;
 }
 
+/**
+ * Strip code block wrapper from content if AI accidentally wrapped entire content in code block
+ * @param {string} content - The content to clean
+ * @returns {string} - Content without code block wrapper
+ */
+function stripContentCodeBlock(content) {
+  if (!content || typeof content !== 'string') return content;
+  
+  let cleaned = content.trim();
+  
+  // Check if content starts with code block and ends with code block
+  // Pattern: ```language\n...content...\n```
+  const codeBlockPattern = /^```(?:markdown|python|javascript|java|cpp|c\+\+|html|css|json|text|plain)?\s*\n?([\s\S]*?)\n?```\s*$/i;
+  const match = cleaned.match(codeBlockPattern);
+  
+  if (match) {
+    console.log('[stripContentCodeBlock] Detected and removed code block wrapper from content');
+    cleaned = match[1].trim();
+  }
+  
+  return cleaned;
+}
+
 function normalizeDocumentPayload(rawDoc = {}, context) {
   const title =
     rawDoc.title?.trim() ||
@@ -149,8 +186,9 @@ function normalizeDocumentPayload(rawDoc = {}, context) {
       : `Summary of the key points for "${context.lessonTitle}".`);
   const tags = sanitizeTags(rawDoc.tags, context.keyTerms, context.lessonTitle);
   let content = (rawDoc.content || "").trim();
-  // Remove existing code block wrappers
-  content = content.replace(/^```[\w]*\n?/gm, "").replace(/\n?```$/gm, "").trim();
+  
+  // Strip code block wrapper if AI wrapped entire content in code block
+  content = stripContentCodeBlock(content);
   
   // Only wrap in code block for programming courses
   if (isProgrammingCourse(context.courseTitle, context.lessonTitle)) {
@@ -208,7 +246,9 @@ function buildFallbackDocument(context) {
       `${sections[2]}\n${localized.examples}`,
       `${sections[3]}\n${localized.practice}`,
       `${sections[4]}\n${localized.overview}`,
-      `${sections[5]}\n${localized.recap}`,
+      `${sections[5]}\n${context.language === "vi" ? `### Ứng dụng thực tế\n- Áp dụng ${context.lessonTitle} trong công việc hàng ngày\n- Tips từ chuyên gia trong ngành\n- Các công cụ hữu ích` : `### Real-World Applications\n- Apply ${context.lessonTitle} in daily work\n- Expert tips\n- Useful tools`}`,
+      `${sections[6]}\n${localized.recap}`,
+      `${sections[7]}\n${context.language === "vi" ? `### Tóm tắt\n- Nắm vững ${context.lessonTitle}\n- Thực hành thường xuyên\n- Tiếp tục học các chủ đề nâng cao` : `### Summary\n- Master ${context.lessonTitle}\n- Practice regularly\n- Continue with advanced topics`}`,
     ].join("\n\n")
   );
   return {

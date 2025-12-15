@@ -9,6 +9,30 @@ const BASE_TIMEOUT = 300000; // 5 minutes
 const STREAM_TIMEOUT = 240000; // 4 minutes for stream operations
 const EXPANDED_TOKENS = 16384; // Increased from 8192
 
+/**
+ * Strip code block wrapper from content if AI accidentally wrapped entire content in code block
+ * This handles cases like: ```markdown\n...content...\n``` or ```python\n...content...\n```
+ * @param {string} content - The content to clean
+ * @returns {string} - Content without code block wrapper
+ */
+function stripContentCodeBlock(content) {
+  if (!content || typeof content !== 'string') return content;
+  
+  let cleaned = content.trim();
+  
+  // Check if content starts with code block and ends with code block
+  // Pattern: ```language\n...content...\n```
+  const codeBlockPattern = /^```(?:markdown|python|javascript|java|cpp|c\+\+|html|css|json|text|plain)?\s*\n?([\s\S]*?)\n?```\s*$/i;
+  const match = cleaned.match(codeBlockPattern);
+  
+  if (match) {
+    console.log('[stripContentCodeBlock] Detected and removed code block wrapper from content');
+    cleaned = match[1].trim();
+  }
+  
+  return cleaned;
+}
+
 // Detect course type for appropriate content structure
 function detectCourseType(courseTitle = "", courseDescription = "", lessonTitle = "") {
   const text = `${courseTitle} ${courseDescription} ${lessonTitle}`.toLowerCase();
@@ -203,7 +227,12 @@ Mỗi bài tập PHẢI có ĐÁP ÁN chi tiết.
 ❌ Case study doanh nghiệp (không phù hợp với khóa ngoại ngữ)
 ❌ Nội dung không liên quan đến ngôn ngữ
 
-Trả về JSON HOÀN CHỈNH với: title, content, summary, tags`;
+Trả về JSON HOÀN CHỈNH với: title, content, summary, tags
+
+⚠️ QUAN TRỌNG VỀ FORMAT:
+- Field "content" phải là MARKDOWN THUẦN TÚY, KHÔNG được wrap trong code block (\`\`\`markdown hoặc \`\`\`python)
+- Chỉ dùng code block cho các đoạn CODE THỰC SỰ bên trong nội dung
+- KHÔNG wrap toàn bộ nội dung trong một code block lớn`;
 }
 
 // Get example guide based on course type
@@ -1191,7 +1220,12 @@ Tạo tài liệu học tập TOÀN DIỆN, CHI TIẾT, ĐẦY ĐỦ KIẾN TH�
 - Liên hệ với thực tế cuộc sống/công việc
 - Cung cấp tips, tricks, best practices của ngành
 
-TRẢ VỀ JSON HOÀN CHỈNH với: title, content, summary, tags.`
+TRẢ VỀ JSON HOÀN CHỈNH với: title, content, summary, tags.
+
+⚠️ QUAN TRỌNG VỀ FORMAT:
+- Field "content" phải là MARKDOWN THUẦN TÚY, KHÔNG được wrap trong code block (\`\`\`markdown hoặc \`\`\`python)
+- Chỉ dùng code block cho các đoạn CODE THỰC SỰ bên trong nội dung (ví dụ: code JavaScript, Python)
+- KHÔNG wrap toàn bộ nội dung trong một code block lớn`
         : `You are an expert educator with 15+ years of experience at the ${level} level.
 Field of expertise: ${courseTitle}
 Course type: ${courseType}
@@ -1220,7 +1254,12 @@ Create COMPREHENSIVE, DETAILED, COMPLETE educational content that enables COMPLE
    - Others: Adjust to field requirements
 6. NEVER stop mid-content - complete ALL sections
 
-Return COMPLETE JSON with: title, content, summary, tags.`;
+Return COMPLETE JSON with: title, content, summary, tags.
+
+⚠️ IMPORTANT FORMAT RULES:
+- Field "content" must be PLAIN MARKDOWN, NOT wrapped in code blocks (\`\`\`markdown or \`\`\`python)
+- Only use code blocks for ACTUAL CODE snippets inside the content (e.g., JavaScript, Python code)
+- DO NOT wrap the entire content in a single large code block`;
 
     // Generate course-type specific examples and guidance
     const courseTypeGuidance = getCourseTypeDetailedGuidance(courseType, lessonTitle, keyTerms);
@@ -1239,7 +1278,13 @@ ${lessonContent || "Không có hướng dẫn - hãy tự tạo tài liệu HOÀ
 
 🎯 TỪ KHÓA QUAN TRỌNG (phải giải thích CHI TIẾT): ${keyTerms.join(", ")}
 
-${courseTypeGuidance}
+💡 GỢI Ý NỘI DUNG THEO LOẠI KHÓA HỌC "${courseType}":
+- Lập trình: Code examples với giải thích từng dòng, input/output mẫu
+- Ngoại ngữ: Hội thoại mẫu, từ vựng với phiên âm, ngữ pháp, bài tập ngôn ngữ
+- Kinh doanh: Case studies thực tế, số liệu cụ thể, chiến lược áp dụng
+- Thiết kế: Quy trình thiết kế, nguyên tắc, ví dụ minh họa
+- Kỹ năng mềm: Tình huống thực tế, dialogue mẫu, roleplay
+- Khác: Điều chỉnh phù hợp với lĩnh vực cụ thể
 
 ⚠️ LƯU Ý QUAN TRỌNG:
 - Nội dung hướng dẫn trên CHỈ LÀ GỢI Ý - KHÔNG ĐỦ để dạy học viên
@@ -1276,9 +1321,7 @@ ${courseTypeGuidance}
 - Best practices trong ngành
 
 ### 5. Ví dụ thực tế (800-1000 từ - QUAN TRỌNG NHẤT)
-Tạo ÍT NHẤT 6-8 ví dụ CỤ THỂ phù hợp với loại khóa học "${courseType}":
-
-${getCourseTypeExampleGuide(courseType, lessonTitle)}
+Tạo ÍT NHẤT 6-8 ví dụ CỤ THỂ phù hợp với chủ đề bài học:
 
 **Cấu trúc mỗi ví dụ:**
 - Bối cảnh/Tình huống: [mô tả cụ thể, rõ ràng]
@@ -1291,10 +1334,13 @@ ${getCourseTypeExampleGuide(courseType, lessonTitle)}
 **Ví dụ 1-2: Cơ bản** - Dễ hiểu, phù hợp người mới
 **Ví dụ 3-4: Trung bình** - Phức tạp hơn, kết hợp nhiều yếu tố
 **Ví dụ 5-6: Nâng cao** - Case study thực tế từ doanh nghiệp/chuyên gia
-**Ví dụ 7-8: Đặc biệt** - Trường hợp ngoại lệ, tips nâng cao
 
-### 6. Nội dung chuyên biệt (500-700 từ)
-${getCourseTypeSpecialContent(courseType, lessonTitle)}
+### 6. Ứng dụng thực tế & Tips chuyên gia (500-700 từ)
+- Cách áp dụng ${lessonTitle} trong công việc/cuộc sống thực tế
+- Tips và tricks từ chuyên gia trong ngành
+- Các công cụ/tài nguyên hữu ích
+- Những sai lầm thường gặp và cách tránh
+- Best practices được khuyến nghị
 
 ### 7. Bài tập thực hành (600-800 từ)
 Tạo 6-8 bài tập với HƯỚNG DẪN GIẢI:
@@ -1354,15 +1400,59 @@ ${lessonContent || "No guide - create COMPLETE content based on lesson title"}
 📋 MANDATORY STRUCTURE (EACH SECTION MUST BE LONG AND DETAILED):
 
 ### 1. Introduction & Importance (300-400 words)
+- What is "${lessonTitle}"? Complete definition
+- Why is it important in ${courseTitle}?
+- Real-world applications
+- Benefits of mastering this knowledge
+
 ### 2. Foundation Knowledge (500-700 words)
+- Basic concepts to know beforehand
+- Terminology and detailed definitions
+- Basic operating principles
+- Connection with previous knowledge
+
 ### 3. In-Depth Knowledge (800-1000 words)
+- DETAILED explanation of each concept
+- Analysis of WHY and HOW
+- Special cases and exceptions
+- Comparison of different approaches
+- Pros and cons of each method
+
 ### 4. Detailed Process (400-600 words)
+- Step-by-step implementation from A-Z
+- Formulas, algorithms (if applicable)
+- Tips and tricks from real experience
+- Common mistakes and how to avoid them
+- Industry best practices
+
 ### 5. Real Examples (800-1000 words - MOST IMPORTANT)
-   - AT LEAST 6-8 CONCRETE examples with context, solution, code, results
-### 6. Code Examples (if programming - 500-700 words)
+- AT LEAST 6 CONCRETE examples with:
+  - Context/Situation
+  - Problem/Goal
+  - Solution/Implementation
+  - Illustration (code/dialogue/data)
+  - Results
+  - Analysis & Lessons learned
+
+### 6. Real-World Applications & Expert Tips (500-700 words)
+- How to apply ${lessonTitle} in real work/life
+- Tips and tricks from industry experts
+- Useful tools/resources
+- Common mistakes and how to avoid them
+- Recommended best practices
+
 ### 7. Practice Exercises (600-800 words)
-   - 6-8 exercises with DETAILED solution guides
+- 6-8 exercises with DETAILED solution guides
+- Basic exercises (1-2)
+- Intermediate exercises (3-4)
+- Advanced exercises (5-6)
+
 ### 8. Summary & Next Steps (300-400 words)
+- Summary of key points
+- Knowledge checklist
+- Next steps for deeper learning
+- Additional references
+- Expert advice
 
 🎯 QUALITY REQUIREMENTS:
 ✅ TOTAL LENGTH: >= 4000 characters
@@ -1444,7 +1534,7 @@ ${lessonContent || "No guide - create COMPLETE content based on lesson title"}
 
     return {
       title: result.title || lessonTitle,
-      content: result.content || "",
+      content: stripContentCodeBlock(result.content || ""),
       summary: result.summary || `Tài liệu chi tiết cho bài "${lessonTitle}"`,
       tags: Array.isArray(result.tags) ? result.tags : keyTerms.slice(0, 5),
     };
@@ -1509,7 +1599,11 @@ ${incompleteResult.content}
 - Nội dung phải ĐỦ ĐỂ HỌC VIÊN TỰ HỌC HOÀN TOÀN
 - KHÔNG được viết tắt hoặc bỏ qua phần nào
 
-Trả về JSON HOÀN CHỈNH với: title, content, summary, tags`
+Trả về JSON HOÀN CHỈNH với: title, content, summary, tags
+
+⚠️ QUAN TRỌNG VỀ FORMAT:
+- Field "content" phải là MARKDOWN THUẦN TÚY, KHÔNG được wrap trong code block
+- Chỉ dùng code block cho các đoạn CODE THỰC SỰ bên trong nội dung`
     : `⚠️ URGENT - FIX INSUFFICIENT CONTENT:
 
 📊 Issues detected:
@@ -1526,7 +1620,11 @@ ${incompleteResult.content}
 5. ✅ Ensure total length >= ${MIN_CONTENT_CHARS} characters
 6. ✅ End with summary and next steps
 
-Return COMPLETE JSON with: title, content, summary, tags`;
+Return COMPLETE JSON with: title, content, summary, tags
+
+⚠️ IMPORTANT FORMAT RULES:
+- Field "content" must be PLAIN MARKDOWN, NOT wrapped in code blocks
+- Only use code blocks for ACTUAL CODE snippets inside the content`;
 
   try {
     const repairedResult = await callLLMJSON({
@@ -1553,7 +1651,7 @@ Return COMPLETE JSON with: title, content, summary, tags`;
       console.log(`[attemptContentRepair] ✅ Content repaired successfully`);
       return {
         title: repairedResult.title || incompleteResult.title || lessonTitle,
-        content: repairedResult.content,
+        content: stripContentCodeBlock(repairedResult.content),
         summary: repairedResult.summary || incompleteResult.summary,
         tags: Array.isArray(repairedResult.tags) ? repairedResult.tags : incompleteResult.tags || [],
       };
@@ -1565,7 +1663,7 @@ Return COMPLETE JSON with: title, content, summary, tags`;
   // If repair failed, return the original with a note
   return {
     ...incompleteResult,
-    content: incompleteResult.content + "\n\n⚠️ *Lưu ý: Nội dung này có thể chưa đủ chi tiết do giới hạn kỹ thuật. Vui lòng làm mới trang để thử lại hoặc liên hệ giảng viên để bổ sung.*",
+    content: stripContentCodeBlock(incompleteResult.content) + "\n\n⚠️ *Lưu ý: Nội dung này có thể chưa đủ chi tiết do giới hạn kỹ thuật. Vui lòng làm mới trang để thử lại hoặc liên hệ giảng viên để bổ sung.*",
     summary: (incompleteResult.summary || "") + " [Có thể chưa đủ chi tiết]",
   };
 }

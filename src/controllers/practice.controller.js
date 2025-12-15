@@ -319,7 +319,7 @@ exports.submitPracticeAnswer = async (req, res) => {
   }
 };
 
-// Lấy lịch sử luyện tập của người dùng
+// Lấy lịch sử luyện tập của người dùng - GROUP theo bài luyện tập
 exports.getPracticeHistory = async (req, res) => {
   try {
     const { userId, lessonId } = req.params;
@@ -332,20 +332,80 @@ exports.getPracticeHistory = async (req, res) => {
       });
     }
 
+    // Lấy tất cả submissions
     const submissions = await PracticeSubmission.find({ userId, lessonId })
       .populate('practiceId')
       .populate('lessonId courseId')
       .sort({ submittedAt: -1 });
 
+    // Group submissions theo practiceId và tính điểm trung bình cho mỗi bài
+    const practiceMap = new Map();
+    
+    for (const submission of submissions) {
+      const practiceId = submission.practiceId?._id?.toString();
+      if (!practiceId) continue;
+
+      if (!practiceMap.has(practiceId)) {
+        practiceMap.set(practiceId, {
+          practice: submission.practiceId,
+          submissions: [],
+          totalScore: 0,
+          totalQuestions: 0,
+          firstSubmittedAt: submission.submittedAt,
+          lastSubmittedAt: submission.submittedAt,
+          correctCount: 0
+        });
+      }
+
+      const practiceData = practiceMap.get(practiceId);
+      practiceData.submissions.push(submission);
+      practiceData.totalScore += submission.feedback?.score || 0;
+      practiceData.totalQuestions += 1;
+      if (submission.isCorrect) practiceData.correctCount += 1;
+      
+      // Cập nhật thời gian
+      if (submission.submittedAt < practiceData.firstSubmittedAt) {
+        practiceData.firstSubmittedAt = submission.submittedAt;
+      }
+      if (submission.submittedAt > practiceData.lastSubmittedAt) {
+        practiceData.lastSubmittedAt = submission.submittedAt;
+      }
+    }
+
+    // Chuyển đổi thành mảng và tính điểm trung bình
+    const practiceHistory = Array.from(practiceMap.values()).map(data => ({
+      _id: data.practice._id,
+      practice: data.practice,
+      difficulty: data.practice.difficulty,
+      title: data.practice.title,
+      totalQuestions: data.totalQuestions,
+      averageScore: data.totalQuestions > 0 
+        ? Math.round((data.totalScore / data.totalQuestions) * 10) / 10 
+        : 0,
+      correctCount: data.correctCount,
+      incorrectCount: data.totalQuestions - data.correctCount,
+      firstSubmittedAt: data.firstSubmittedAt,
+      lastSubmittedAt: data.lastSubmittedAt,
+      submissions: data.submissions
+    }));
+
+    // Sắp xếp theo thời gian nộp bài gần nhất
+    practiceHistory.sort((a, b) => new Date(b.lastSubmittedAt) - new Date(a.lastSubmittedAt));
+
     const practice = await Practice.findOne({ lessonId, isActive: true });
 
+    // Tính điểm trung bình tổng thể
+    const totalAvgScore = practiceHistory.length > 0
+      ? practiceHistory.reduce((sum, p) => sum + p.averageScore, 0) / practiceHistory.length
+      : 0;
+
     res.json({
-      submissions,
+      practiceHistory, // Danh sách bài luyện tập đã làm (grouped)
+      submissions, // Giữ lại để tương thích ngược
       practice,
+      totalPractices: practiceHistory.length,
       totalSubmissions: submissions.length,
-      averageScore: submissions.length > 0
-        ? submissions.reduce((sum, sub) => sum + sub.feedback.score, 0) / submissions.length
-        : 0
+      averageScore: Math.round(totalAvgScore * 10) / 10
     });
   } catch (error) {
     console.error("[Practice.getPracticeHistory] Error:", error);
