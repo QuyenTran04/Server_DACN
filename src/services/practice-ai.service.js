@@ -1,4 +1,30 @@
 const { callGeminiJSON } = require("../services/gemini.service");
+const PracticeSubmission = require("../models/PracticeSubmission");
+const Practice = require("../models/Practice");
+
+// Hàm đảm bảo mức độ hợp lệ
+function normalizeDifficulty(difficulty) {
+  const validDifficulties = ["Dễ", "Trung bình", "Khó", "Rất Khó"];
+
+  if (validDifficulties.includes(difficulty)) {
+    return difficulty;
+  }
+
+  // Map các giá trị tiếng Anh sang tiếng Việt
+  const difficultyMap = {
+    "easy": "Dễ",
+    "medium": "Trung bình",
+    "hard": "Khó",
+    "very hard": "Rất Khó",
+    "very_hard": "Rất Khó",
+    "Easy": "Dễ",
+    "Medium": "Trung bình",
+    "Hard": "Khó",
+    "Very Hard": "Rất Khó"
+  };
+
+  return difficultyMap[difficulty] || "Trung bình";
+}
 
 function normalizeQuestionResponse(aiResult, { title }) {
   try {
@@ -136,20 +162,58 @@ function normalizeEvaluation(aiResult) {
 // Tạo câu hỏi luyện tập từ nội dung bài học
 exports.generatePracticeQuestion = async ({
   lessonContent,
-  difficulty = "medium",
+  difficulty = "Trung bình",
   questionType = "open_ended",
   title = "Luyện tập",
 }) => {
   try {
+    // Map mức độ sang hướng dẫn cụ thể cho AI
+    const difficultyGuide = {
+      "Dễ": {
+        description: "Câu hỏi cơ bản, kiểm tra hiểu biết về khái niệm chính",
+        examples: "Giải thích khái niệm X là gì? Liệt kê các bước thực hiện Y? Mô tả đặc điểm của Z?",
+        focus: "Nhớ lại và hiểu khái niệm cơ bản từ bài học"
+      },
+      "Trung bình": {
+        description: "Câu hỏi yêu cầu áp dụng kiến thức vào tình huống cụ thể",
+        examples: "Làm thế nào để áp dụng X trong tình huống Y? So sánh A và B? Phân tích ưu nhược điểm của Z?",
+        focus: "Áp dụng và phân tích kiến thức từ bài học"
+      },
+      "Khó": {
+        description: "Câu hỏi yêu cầu tư duy phản biện và giải quyết vấn đề phức tạp",
+        examples: "Đánh giá hiệu quả của phương pháp X trong trường hợp Y? Đề xuất giải pháp cho vấn đề Z? Tại sao A lại quan trọng hơn B trong ngữ cảnh C?",
+        focus: "Phân tích sâu, đánh giá và đề xuất giải pháp"
+      },
+      "Rất Khó": {
+        description: "Câu hỏi yêu cầu tổng hợp kiến thức, sáng tạo và tư duy cấp cao",
+        examples: "Thiết kế một hệ thống/giải pháp hoàn chỉnh cho vấn đề X? Phân tích và so sánh nhiều phương pháp khác nhau? Đề xuất cải tiến cho Y dựa trên nguyên lý Z?",
+        focus: "Tổng hợp, sáng tạo và tư duy hệ thống"
+      }
+    };
+
+    const guide = difficultyGuide[difficulty] || difficultyGuide["Trung bình"];
+
     const systemPrompt = `
 Bạn là giáo viên tạo bài luyện tập cho học viên. Chỉ trả về JSON hợp lệ, không kèm giải thích.
 
-QUAN TRỌNG:
-- Trả về MỘT đối tượng JSON hợp lệ duy nhất
-- Đặt toàn bộ chuỗi trong dấu ngoặc kép nếu có ký tự đặc biệt
-- Sử dụng escape sequences cho dấu ngoặc kép: \\"
-- Không có dấu phẩy thừa ở cuối mảng hoặc đối tượng
-- Đảm bảo JSON hoàn hảo
+QUAN TRỌNG - TẠO CÂU HỎI BÁM SÁT NỘI DUNG BÀI HỌC:
+- Câu hỏi PHẢI dựa trên nội dung CỤ THỂ trong bài học
+- KHÔNG tạo câu hỏi chung chung không liên quan đến bài học
+- Trích dẫn các khái niệm, ví dụ, thuật ngữ CHÍNH XÁC từ bài học
+- Câu hỏi phải giúp học viên ôn tập và hiểu sâu nội dung đã học
+
+ĐỂ TẠO CÂU HỎI TỐT:
+1. Đọc kỹ toàn bộ nội dung bài học
+2. Xác định các khái niệm chính, ví dụ cụ thể, và thuật ngữ quan trọng
+3. Tạo câu hỏi yêu cầu học viên PHẢI dựa vào nội dung bài học để trả lời
+4. Sử dụng chính xác các thuật ngữ, ví dụ trong bài học
+5. Tránh các câu hỏi có thể trả lời bằng kiến thức chung
+
+MỨC ĐỘ: ${difficulty}
+- Mô tả: ${guide.description}
+- Ví dụ: ${guide.examples}
+- Tập trung: ${guide.focus}
+- CHỈ SỬ DỤNG CÁC MỨC ĐỘ: "Dễ", "Trung bình", "Khó", "Rất Khó"
 
 Định dạng BẮT BUỘC:
 {
@@ -157,47 +221,66 @@ QUAN TRỌNG:
   "questions": [
     {
       "id": 1,
-      "question": "Nội dung câu hỏi 1",
-      "explanation": "Giải thích câu hỏi 1"
+      "question": "Nội dung câu hỏi 1 BÁM SÁT bài học",
+      "explanation": "Giải thích câu hỏi 1 và liên hệ với nội dung bài học"
     },
     {
       "id": 2,
-      "question": "Nội dung câu hỏi 2",
-      "explanation": "Giải thích câu hỏi 2"
+      "question": "Nội dung câu hỏi 2 BÁM SÁT bài học",
+      "explanation": "Giải thích câu hỏi 2 và liên hệ với nội dung bài học"
     },
     {
       "id": 3,
-      "question": "Nội dung câu hỏi 3",
-      "explanation": "Giải thích câu hỏi 3"
+      "question": "Nội dung câu hỏi 3 BÁM SÁT bài học",
+      "explanation": "Giải thích câu hỏi 3 và liên hệ với nội dung bài học"
     }
   ],
-  "totalQuestions": 3
+  "totalQuestions": 3,
+  "hints": ["Gợi ý 1 liên quan đến bài học", "Gợi ý 2 liên quan đến bài học"],
+  "tags": ["tag1", "tag2"]
 }
 
-LƯU Ý QUAN TRỌNG:
-- KHÔNG tạo expectedAnswer - AI sẽ đánh giá tự nhiên dựa trên câu trả lời của người dùng
-- Tạo câu hỏi mở, khuyến khích suy nghĩ và sáng tạo
-- Tập trung vào việc áp dụng kiến thức thay vì nhớ lại thông tin`;
+QUY TẮC TẠO CÂU HỎI:
+✅ Sử dụng thuật ngữ, khái niệm CỤ THỂ từ bài học
+✅ Tham chiếu đến ví dụ, tình huống trong bài học
+✅ Yêu cầu áp dụng kiến thức đã học vào tình huống mới
+✅ Phù hợp với mức độ ${difficulty}
+✅ Mức độ phải là một trong: "Dễ", "Trung bình", "Khó", "Rất Khó"
+
+❌ KHÔNG tạo câu hỏi chung chung
+❌ KHÔNG hỏi về kiến thức ngoài bài học
+❌ KHÔNG sử dụng "easy", "medium", "hard" - chỉ dùng tiếng Việt
+❌ KHÔNG tạo expectedAnswer - AI sẽ đánh giá tự nhiên`;
 
     const userPrompt = `
-Nội dung bài học:
+📚 NỘI DUNG BÀI HỌC:
 ${lessonContent}
 
-Yêu cầu:
-- Độ khó: ${difficulty}
-- Tiêu đề gợi ý: ${title}
-- Tạo chính xác 3 câu hỏi MỞ, khuyến khích suy nghĩ và sáng tạo
-- Mỗi câu hỏi tập trung vào việc áp dụng kiến thức vào thực tế
-- KHÔNG tạo câu hỏi chỉ cần nhớ lại thông tin
-- Đặt câu hỏi "Tại sao?", "Làm thế nào?", "Phân tích...", "So sánh...", "Đề xuất..."
+🎯 YÊU CẦU:
+- Mức độ: ${difficulty} (${guide.description})
+- Tiêu đề: ${title}
+- Tạo chính xác 3 câu hỏi BÁM SÁT nội dung bài học trên
+- Mỗi câu hỏi phải tham chiếu đến khái niệm/ví dụ CỤ THỂ trong bài học
+- Độ khó phù hợp với mức ${difficulty}
 
-Hãy tạo JSON hợp lệ theo đúng định dạng trong system prompt. Title sẽ là "Luyện tập: ${title}".`;
+💡 HƯỚNG DẪN CHO MỨC ${difficulty}:
+${guide.focus}
+
+Ví dụ câu hỏi: ${guide.examples}
+
+QUY TẮC QUAN TRỌNG:
+- PHẢI đọc kỹ toàn bộ nội dung bài học trước khi tạo câu hỏi
+- Tạo câu hỏi về các khái niệm, ví dụ, code example CÓ TRONG BÀI HỌC
+- KHÔNG tạo câu hỏi về kiến thức chung
+- Mỗi câu hỏi phải YÊU CẦU học viên DỰA VÀO NỘI DUNG BÀI HỌC để trả lời
+
+Hãy tạo JSON hợp lệ theo đúng định dạng. Title sẽ là "Luyện tập: ${title}".`;
 
     const aiResult = await callGeminiJSON({
       systemPrompt,
       userPrompt,
       temperature: 0.7,
-      maxOutputTokens: 800,
+      maxOutputTokens: 1000,
     });
 
     return normalizeQuestionResponse(aiResult, { title });
@@ -213,26 +296,41 @@ exports.evaluatePracticeAnswer = async ({
   userAnswer,
   expectedAnswer = "",
   lessonContent,
-  difficulty = "medium",
+  difficulty = "Trung bình",
   answerType = "text",
   language = "javascript",
 }) => {
   try {
+    // Hướng dẫn đánh giá theo mức độ
+    const difficultyEvalGuide = {
+      "Dễ": "Đánh giá xem học viên có hiểu đúng khái niệm cơ bản không. Chấp nhận câu trả lời đơn giản nhưng chính xác.",
+      "Trung bình": "Đánh giá khả năng áp dụng kiến thức. Yêu cầu giải thích rõ ràng và có ví dụ minh họa.",
+      "Khó": "Đánh giá tư duy phản biện và khả năng phân tích. Yêu cầu phân tích sâu, so sánh và đánh giá.",
+      "Rất Khó": "Đánh giá khả năng tổng hợp và sáng tạo. Yêu cầu giải pháp hoàn chỉnh, có tính hệ thống và sáng tạo."
+    };
+
+    const evalGuide = difficultyEvalGuide[difficulty] || difficultyEvalGuide["Trung bình"];
+
     const systemPrompt = `
 Bạn là chuyên gia đánh giá bài luyện tập. Hãy phân tích câu trả lời của học viên một cách khách quan, chỉ rõ vấn đề và đưa ra giải thích cụ thể.
 
+MỨC ĐỘ BÀI TẬP: ${difficulty}
+TIÊU CHÍ ĐÁNH GIÁ: ${evalGuide}
+
 YÊU CẦU ĐÁNH GIÁ:
+- Đánh giá dựa trên nội dung bài học đã cung cấp
 - Phân tích sâu hiểu biết của học viên về vấn đề
 - Chỉ ra chính xác đâu là điểm đúng, đâu là điểm chưa chính xác
 - Giải thích tại sao một cách tiếp cận đúng và cách khác chưa đúng
-- Đưa ra ví dụ cụ thể để minh họa
+- Đưa ra ví dụ cụ thể từ bài học để minh họa
+- Điểm số phải phản ánh đúng mức độ bài tập
 
 Định dạng JSON (chỉ trả về object duy nhất):
 
 {
   "score": 7.5,
-  "feedback": "Phân tích chi tiết câu trả lời: [chỉ rõ điểm đúng, điểm sai, và giải thích tại sao]. Ví dụ cụ thể: [minh họa bằng ví dụ thực tế].",
-  "suggestions": "Để cải thiện, bạn nên: [hướng dẫn cụ thể từng bước]. Ví dụ áp dụng: [ví dụ cụ thể]."
+  "feedback": "Phân tích chi tiết câu trả lời dựa trên nội dung bài học: [chỉ rõ điểm đúng, điểm sai, và giải thích tại sao]. Ví dụ từ bài học: [minh họa bằng ví dụ từ bài học].",
+  "suggestions": "Để cải thiện, bạn nên: [hướng dẫn cụ thể từng bước dựa trên bài học]. Ví dụ áp dụng: [ví dụ cụ thể từ bài học]."
 }`;
 
       const userPrompt = `
@@ -312,5 +410,89 @@ ${answerType === 'code' ? `
   } catch (error) {
     console.error("[PracticeAI.evaluatePracticeAnswer] Error:", error);
     throw new Error("Không thể đánh giá câu trả lời");
+  }
+};
+
+// Xuất hàm normalizeDifficulty để sử dụng ở controller
+exports.normalizeDifficulty = normalizeDifficulty;
+
+// Lấy lịch sử và điều chỉnh mức độ dựa trên kết quả trước đó
+exports.getRecommendedDifficulty = async ({ userId, lessonId }) => {
+  try {
+    // Lấy tất cả các bài nộp của user trong bài học này
+    const submissions = await PracticeSubmission.find({
+      userId,
+      lessonId,
+      aiProcessed: true
+    })
+      .sort({ submittedAt: -1 })
+      .populate('practiceId');
+
+    if (submissions.length === 0) {
+      return {
+        nextDifficulty: "Trung bình",
+        lastScore: null,
+        lastDifficulty: null,
+        message: "Bài luyện tập đầu tiên sẽ ở mức độ Trung bình",
+        totalSubmissions: 0,
+        averageScore: 0
+      };
+    }
+
+    // Lấy bài nộp gần nhất
+    const lastSubmission = submissions[0];
+    const lastScore = lastSubmission.feedback?.score || 0;
+    const lastDifficulty = lastSubmission.practiceId?.difficulty || "Trung bình";
+
+    // Tính điểm trung bình của tất cả các bài đã nộp
+    const averageScore = submissions.reduce((sum, sub) => sum + (sub.feedback?.score || 0), 0) / submissions.length;
+
+    // Điều chỉnh mức độ dựa trên điểm gần nhất
+    const difficultyLevels = ["Dễ", "Trung bình", "Khó", "Rất Khó"];
+    const currentIndex = difficultyLevels.indexOf(lastDifficulty);
+
+    let nextDifficulty = lastDifficulty;
+
+    if (currentIndex !== -1) {
+      if (lastScore > 8 && currentIndex < difficultyLevels.length - 1) {
+        nextDifficulty = difficultyLevels[currentIndex + 1];
+      } else if (lastScore < 5 && currentIndex > 0) {
+        nextDifficulty = difficultyLevels[currentIndex - 1];
+      }
+    }
+
+    let message = "";
+    if (lastScore > 8) {
+      message = `Xuất sắc! Điểm ${lastScore}/10 → Tăng lên mức độ ${nextDifficulty}`;
+    } else if (lastScore < 5) {
+      message = `Điểm ${lastScore}/10 → Giảm xuống mức độ ${nextDifficulty} để ôn tập`;
+    } else {
+      message = `Điểm ${lastScore}/10 → Giữ nguyên mức độ ${nextDifficulty}`;
+    }
+
+    return {
+      nextDifficulty,
+      lastScore,
+      lastDifficulty,
+      message,
+      totalSubmissions: submissions.length,
+      averageScore: Math.round(averageScore * 10) / 10, // Làm tròn 1 chữ số thập phân
+      difficultyLevels,
+      scoringRules: {
+        increase: "Điểm > 8/10 → Tăng 1 mức",
+        maintain: "Điểm 5-8/10 → Giữ nguyên",
+        decrease: "Điểm < 5/10 → Giảm 1 mức"
+      }
+    };
+  } catch (error) {
+    console.error("[PracticeAI.getRecommendedDifficulty] Error:", error);
+    return {
+      nextDifficulty: "Trung bình",
+      lastScore: null,
+      lastDifficulty: null,
+      message: "Lỗi khi lấy thông tin, sử dụng mức độ mặc định",
+      totalSubmissions: 0,
+      averageScore: 0
+    };
   }
 };

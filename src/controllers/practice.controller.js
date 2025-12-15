@@ -1,7 +1,30 @@
 const Practice = require("../models/Practice");
 const PracticeSubmission = require("../models/PracticeSubmission");
-const { generatePracticeQuestion, evaluatePracticeAnswer } = require("../services/practice-ai.service");
+const { generatePracticeQuestion, evaluatePracticeAnswer, getRecommendedDifficulty, normalizeDifficulty } = require("../services/practice-ai.service");
 const walletService = require("../services/wallet.service");
+
+// Hàm điều chỉnh mức độ dựa trên điểm số bài trước
+function adjustDifficulty(currentDifficulty, score) {
+  const difficultyLevels = ["Dễ", "Trung bình", "Khó", "Rất Khó"];
+  const currentIndex = difficultyLevels.indexOf(currentDifficulty);
+  
+  if (currentIndex === -1) {
+    return "Trung bình"; // Mặc định nếu không tìm thấy
+  }
+
+  // Điểm > 8/10 → tăng 1 mức
+  if (score > 8 && currentIndex < difficultyLevels.length - 1) {
+    return difficultyLevels[currentIndex + 1];
+  }
+  
+  // Điểm < 5/10 → giảm 1 mức
+  if (score < 5 && currentIndex > 0) {
+    return difficultyLevels[currentIndex - 1];
+  }
+  
+  // Điểm 5-8 → giữ nguyên
+  return currentDifficulty;
+}
 
 // Lấy bài luyện tập theo bài học
 exports.getPracticeByLesson = async (req, res) => {
@@ -26,10 +49,39 @@ exports.getPracticeByLesson = async (req, res) => {
       userId
     }).sort({ submittedAt: -1 });
 
+    // Lấy thông tin bài luyện tập trước đó để hiển thị mức độ tiếp theo
+    const previousSubmissions = await PracticeSubmission.find({
+      userId,
+      lessonId,
+      aiProcessed: true
+    })
+      .sort({ submittedAt: -1 })
+      .limit(1)
+      .populate('practiceId');
+
+    let nextDifficulty = "Trung bình";
+    let lastScore = null;
+    
+    if (previousSubmissions.length > 0) {
+      const lastSubmission = previousSubmissions[0];
+      lastScore = lastSubmission.feedback?.score || 0;
+      const lastDifficulty = lastSubmission.practiceId?.difficulty || "Trung bình";
+      nextDifficulty = adjustDifficulty(lastDifficulty, lastScore);
+    }
+
     res.json({
       practice,
       userSubmissions: submissions,
-      totalAttempts: submissions.length
+      totalAttempts: submissions.length,
+      lastScore,
+      nextDifficulty,
+      difficultyInfo: {
+        current: practice.difficulty,
+        next: nextDifficulty,
+        message: lastScore !== null 
+          ? `Dựa trên điểm ${lastScore}/10 của bài trước, bài tiếp theo sẽ ở mức độ ${nextDifficulty}`
+          : "Bài luyện tập đầu tiên sẽ ở mức độ Trung bình"
+      }
     });
   } catch (error) {
     console.error("[Practice.getPracticeByLesson] Error:", error);
@@ -43,8 +95,8 @@ exports.getPracticeByLesson = async (req, res) => {
 exports.createPractice = async (req, res) => {
   let walletCharge = null;
   const userId = req.user?._id || req.user?.id;
+  const { lessonId, title, lessonContent, difficulty, questionType = "open_ended" } = req.body;
   try {
-    const { lessonId, title, lessonContent, difficulty = "medium", questionType = "open_ended" } = req.body;
 
     if (!lessonId || !lessonContent) {
       return res.status(400).json({
@@ -52,8 +104,28 @@ exports.createPractice = async (req, res) => {
       });
     }
 
-    // Kiểm tra xem đã có bài luyện tập chưa
-    const existingPractice = await Practice.findOne({ lessonId, isActive: true });
+    // Xác định mức độ cho bài luyện tập mới
+    let finalDifficulty = difficulty || "Trung bình"; // Mặc định là Trung bình
+
+    // Nếu không truyền difficulty, sử dụng service để lấy mức độ đề xuất
+    if (!difficulty) {
+      const difficultyInfo = await getRecommendedDifficulty({ userId, lessonId });
+      finalDifficulty = difficultyInfo.nextDifficulty;
+
+      console.log(`[Practice.createPractice] Điều chỉnh mức độ tự động:`, {
+        message: difficultyInfo.message,
+        lastScore: difficultyInfo.lastScore,
+        newDifficulty: finalDifficulty
+      });
+    }
+
+    // Kiểm tra xem đã có bài luyện tập với mức độ này chưa
+    const existingPractice = await Practice.findOne({ 
+      lessonId, 
+      isActive: true,
+      difficulty: finalDifficulty 
+    });
+    
     if (existingPractice) {
       return res.json(existingPractice);
     }
@@ -75,13 +147,16 @@ exports.createPractice = async (req, res) => {
       throw err;
     }
 
-    // Sử dụng AI để tạo câu hỏi luyện tập
+    // Sử dụng AI để tạo câu hỏi luyện tập với mức độ đã điều chỉnh
     const aiResult = await generatePracticeQuestion({
       lessonContent,
-      difficulty,
+      difficulty: finalDifficulty,
       questionType,
       title: title || "Luyện tập"
     });
+
+    // Đảm bảo mức độ hợp lệ trước khi lưu
+    const normalizedDifficulty = normalizeDifficulty(finalDifficulty);
 
     const practice = new Practice({
       title: aiResult.title || title || "Luyện tập",
@@ -91,7 +166,7 @@ exports.createPractice = async (req, res) => {
       totalQuestions: aiResult.totalQuestions || (aiResult.questions?.length || 1),
       lessonId,
       courseId: req.body.courseId,
-      difficulty,
+      difficulty: normalizedDifficulty,
       questionType,
       lessonContent,
       // expectedAnswer removed - AI will evaluate naturally
@@ -276,6 +351,24 @@ exports.getPracticeHistory = async (req, res) => {
     console.error("[Practice.getPracticeHistory] Error:", error);
     res.status(500).json({
       message: "Lỗi khi lấy lịch sử luyện tập"
+    });
+  }
+};
+
+// Lấy thông tin mức độ tiếp theo cho bài luyện tập
+exports.getNextDifficulty = async (req, res) => {
+  try {
+    const { lessonId } = req.params;
+    const userId = req.user?._id || req.user?.id;
+
+    // Sử dụng service để lấy thông tin mức độ đề xuất
+    const difficultyInfo = await getRecommendedDifficulty({ userId, lessonId });
+
+    res.json(difficultyInfo);
+  } catch (error) {
+    console.error("[Practice.getNextDifficulty] Error:", error);
+    res.status(500).json({
+      message: "Lỗi khi lấy thông tin mức độ"
     });
   }
 };

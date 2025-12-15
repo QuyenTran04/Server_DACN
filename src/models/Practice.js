@@ -21,8 +21,8 @@ const practiceSchema = new Schema(
     courseId: { type: Schema.Types.ObjectId, ref: "Course", required: true },
     difficulty: {
       type: String,
-      enum: ["easy", "medium", "hard"],
-      default: "medium"
+      enum: ["Dễ", "Trung bình", "Khó", "Rất Khó"],
+      default: "Trung bình"
     },
     questionType: {
       type: String,
