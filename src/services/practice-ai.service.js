@@ -167,121 +167,173 @@ exports.generatePracticeQuestion = async ({
   title = "Luyện tập",
 }) => {
   try {
-    // Map mức độ sang hướng dẫn cụ thể cho AI - TẬP TRUNG VÀO CÂU HỎI VẬN DỤNG
+    // Map mức độ sang hướng dẫn cụ thể cho AI - CÂU HỎI ĐƠN GIẢN → KHÓ DẦN
     const difficultyGuide = {
       "Dễ": {
-        description: "Câu hỏi VẬN DỤNG cơ bản - áp dụng kiến thức vào tình huống đơn giản",
-        examples: "Cho tình huống X, hãy áp dụng kiến thức Y để giải quyết? Viết code/thực hiện Z theo yêu cầu cụ thể? Với dữ liệu A, hãy tính toán/xử lý để ra kết quả B?",
-        focus: "Vận dụng kiến thức cơ bản vào bài tập thực hành đơn giản, có hướng dẫn rõ ràng"
+        description: "Câu hỏi NGẮN GỌN, ĐƠN GIẢN - trả lời được ngay trong 1-2 câu",
+        examples: "Kết quả của 2+3 là bao nhiêu? Từ 'hello' trong tiếng Việt nghĩa là gì? Biến x trong đoạn code sau có giá trị bao nhiêu?",
+        focus: "Câu hỏi RẤT ĐƠN GIẢN, chỉ cần nhớ/hiểu 1 khái niệm cơ bản từ bài học. Người dùng có thể trả lời NGAY LẬP TỨC trong vài giây. Câu trả lời ngắn gọn 1-2 câu hoặc 1 con số/từ.",
+        answerLength: "Câu trả lời chỉ cần 1-2 câu ngắn hoặc 1 giá trị cụ thể"
       },
       "Trung bình": {
-        description: "Câu hỏi VẬN DỤNG nâng cao - giải quyết vấn đề thực tế với nhiều bước",
-        examples: "Xây dựng chức năng X với các yêu cầu cụ thể? Cho bài toán thực tế Y, hãy thiết kế giải pháp? Tối ưu hóa đoạn code/quy trình Z để đạt hiệu quả cao hơn?",
-        focus: "Vận dụng kiến thức để giải quyết bài toán thực tế, yêu cầu tư duy logic và kết hợp nhiều khái niệm"
+        description: "Câu hỏi yêu cầu GIẢI THÍCH hoặc ÁP DỤNG đơn giản",
+        examples: "Giải thích tại sao kết quả là X? Viết đoạn code ngắn để làm Y? Tính toán kết quả theo công thức đã học?",
+        focus: "Câu hỏi cần suy nghĩ một chút, áp dụng kiến thức bài học vào bài tập cụ thể. Câu trả lời khoảng 3-5 câu hoặc đoạn code ngắn.",
+        answerLength: "Câu trả lời khoảng 3-5 câu hoặc đoạn code ngắn 5-10 dòng"
       },
       "Khó": {
-        description: "Câu hỏi VẬN DỤNG phức tạp - thiết kế và giải quyết vấn đề đa chiều",
-        examples: "Thiết kế hệ thống X đáp ứng các yêu cầu phức tạp? Phân tích và đề xuất giải pháp cho vấn đề Y trong ngữ cảnh thực tế? Debug và cải tiến code/quy trình Z có nhiều lỗi tiềm ẩn?",
-        focus: "Vận dụng sáng tạo, phân tích vấn đề từ nhiều góc độ, đề xuất giải pháp tối ưu"
+        description: "Câu hỏi yêu cầu PHÂN TÍCH và GIẢI QUYẾT vấn đề",
+        examples: "Phân tích đoạn code sau và tìm lỗi? So sánh 2 cách tiếp cận và chọn cách tốt hơn? Giải bài toán phức tạp hơn?",
+        focus: "Câu hỏi đòi hỏi hiểu sâu, phân tích và vận dụng nhiều kiến thức. Câu trả lời cần giải thích chi tiết.",
+        answerLength: "Câu trả lời chi tiết, có phân tích và giải thích"
       },
       "Rất Khó": {
-        description: "Câu hỏi VẬN DỤNG cấp cao - tổng hợp và sáng tạo giải pháp hoàn chỉnh",
-        examples: "Thiết kế kiến trúc hoàn chỉnh cho hệ thống X với các ràng buộc phức tạp? Xây dựng giải pháp end-to-end cho bài toán Y? Đánh giá và cải tiến toàn diện hệ thống Z?",
-        focus: "Tổng hợp tất cả kiến thức, tư duy hệ thống, sáng tạo giải pháp mới và đánh giá trade-offs"
+        description: "Câu hỏi yêu cầu THIẾT KẾ và SÁNG TẠO giải pháp",
+        examples: "Thiết kế giải pháp hoàn chỉnh cho vấn đề X? Tối ưu hóa và cải tiến code/quy trình? Đánh giá ưu nhược điểm của các phương pháp?",
+        focus: "Câu hỏi phức tạp, cần tổng hợp kiến thức và sáng tạo. Câu trả lời cần đầy đủ và có tính hệ thống.",
+        answerLength: "Câu trả lời đầy đủ, có thiết kế/giải pháp hoàn chỉnh"
       }
     };
 
     const guide = difficultyGuide[difficulty] || difficultyGuide["Trung bình"];
 
     const systemPrompt = `
-Bạn là giáo viên tạo bài luyện tập VẬN DỤNG cho học viên. Chỉ trả về JSON hợp lệ, không kèm giải thích.
+Bạn là giáo viên tạo CÂU HỎI LUYỆN TẬP cho học viên. Chỉ trả về JSON hợp lệ, không kèm giải thích.
 
-🎯 QUAN TRỌNG - CHỈ TẠO CÂU HỎI VẬN DỤNG (KHÔNG PHẢI LÝ THUYẾT):
-- Câu hỏi VẬN DỤNG = yêu cầu học viên THỰC HÀNH, GIẢI BÀI TẬP, VIẾT CODE, TÍNH TOÁN
-- KHÔNG hỏi "X là gì?", "Giải thích Y?", "Liệt kê Z?" - đây là câu hỏi lý thuyết
-- PHẢI hỏi "Cho tình huống X, hãy làm Y?", "Viết code để Z?", "Giải bài toán A?"
+🎯 NGUYÊN TẮC QUAN TRỌNG:
+1. Câu hỏi PHẢI LIÊN QUAN TRỰC TIẾP đến nội dung bài học
+2. Sử dụng KHÁI NIỆM, VÍ DỤ CỤ THỂ từ bài học
+3. Độ khó phải PHÙ HỢP với mức độ yêu cầu
 
-📝 LOẠI CÂU HỎI VẬN DỤNG CẦN TẠO:
-1. BÀI TẬP THỰC HÀNH: Cho dữ liệu/tình huống cụ thể, yêu cầu giải quyết
-2. VIẾT CODE/CÔNG THỨC: Yêu cầu viết code, công thức, thuật toán
-3. TÍNH TOÁN/XỬ LÝ: Cho input, yêu cầu tính output theo kiến thức đã học
-4. THIẾT KẾ/XÂY DỰNG: Yêu cầu thiết kế giải pháp cho vấn đề cụ thể
-5. DEBUG/TỐI ƯU: Cho code/quy trình có lỗi, yêu cầu sửa và cải tiến
+📊 MỨC ĐỘ HIỆN TẠI: ${difficulty}
+- ${guide.description}
+- ${guide.focus}
+- ${guide.answerLength}
 
-MỨC ĐỘ VẬN DỤNG: ${difficulty}
-- Mô tả: ${guide.description}
-- Ví dụ: ${guide.examples}
-- Tập trung: ${guide.focus}
+${difficulty === "Dễ" ? `
+🟢 MỨC DỄ - CÂU HỎI NGẮN GỌN, TRẢ LỜI NGAY:
+- Câu hỏi chỉ hỏi 1 điều đơn giản
+- Người dùng trả lời được trong vài giây
+- Câu trả lời chỉ cần 1-2 câu hoặc 1 giá trị
 
-Định dạng BẮT BUỘC:
+VÍ DỤ CÂU HỎI MỨC DỄ:
+- "Trong Python, lệnh print('Hello') sẽ in ra gì?"
+- "2 + 3 * 4 = ?"
+- "Từ 'apple' nghĩa là gì?"
+- "CSS property nào dùng để đổi màu chữ?"
+- "Biến let x = 5; x có giá trị bao nhiêu?"
+` : ''}
+
+${difficulty === "Trung bình" ? `
+🟡 MỨC TRUNG BÌNH - CÂU HỎI CẦN SUY NGHĨ:
+- Yêu cầu áp dụng kiến thức vào bài tập cụ thể
+- Cần giải thích ngắn gọn hoặc viết code đơn giản
+- Câu trả lời khoảng 3-5 câu
+
+VÍ DỤ CÂU HỎI MỨC TRUNG BÌNH:
+- "Viết vòng lặp for in ra các số từ 1 đến 5"
+- "Giải thích tại sao kết quả của đoạn code sau là X?"
+- "Tính diện tích hình chữ nhật có chiều dài 5, chiều rộng 3"
+` : ''}
+
+${difficulty === "Khó" ? `
+🟠 MỨC KHÓ - CÂU HỎI PHÂN TÍCH:
+- Yêu cầu phân tích, so sánh, tìm lỗi
+- Cần hiểu sâu kiến thức bài học
+- Câu trả lời cần giải thích chi tiết
+
+VÍ DỤ CÂU HỎI MỨC KHÓ:
+- "Tìm và sửa lỗi trong đoạn code sau: ..."
+- "So sánh 2 cách tiếp cận A và B, cách nào tốt hơn?"
+- "Phân tích độ phức tạp của thuật toán sau"
+` : ''}
+
+${difficulty === "Rất Khó" ? `
+🔴 MỨC RẤT KHÓ - CÂU HỎI THIẾT KẾ:
+- Yêu cầu thiết kế giải pháp hoàn chỉnh
+- Cần tổng hợp nhiều kiến thức
+- Câu trả lời cần đầy đủ và có hệ thống
+
+VÍ DỤ CÂU HỎI MỨC RẤT KHÓ:
+- "Thiết kế hệ thống quản lý X với các yêu cầu..."
+- "Tối ưu hóa đoạn code sau để chạy nhanh hơn"
+- "Đề xuất giải pháp hoàn chỉnh cho vấn đề Y"
+` : ''}
+
+Định dạng JSON BẮT BUỘC:
 {
   "title": "Luyện tập: Tên bài học",
   "questions": [
     {
       "id": 1,
-      "question": "Câu hỏi VẬN DỤNG 1 - yêu cầu thực hành/giải bài tập",
-      "explanation": "Kiến thức cần vận dụng từ bài học"
+      "question": "Câu hỏi 1 - phù hợp mức độ ${difficulty}",
+      "explanation": "Kiến thức cần dùng từ bài học"
     },
     {
       "id": 2,
-      "question": "Câu hỏi VẬN DỤNG 2 - yêu cầu thực hành/giải bài tập",
-      "explanation": "Kiến thức cần vận dụng từ bài học"
+      "question": "Câu hỏi 2 - phù hợp mức độ ${difficulty}",
+      "explanation": "Kiến thức cần dùng từ bài học"
     },
     {
       "id": 3,
-      "question": "Câu hỏi VẬN DỤNG 3 - yêu cầu thực hành/giải bài tập",
-      "explanation": "Kiến thức cần vận dụng từ bài học"
+      "question": "Câu hỏi 3 - phù hợp mức độ ${difficulty}",
+      "explanation": "Kiến thức cần dùng từ bài học"
     }
   ],
   "totalQuestions": 3,
-  "hints": ["Gợi ý thực hành 1", "Gợi ý thực hành 2"],
-  "tags": ["practice", "application"]
-}
-
-✅ CÂU HỎI VẬN DỤNG TỐT:
-- "Cho mảng [1,2,3,4,5], viết code để tính tổng các phần tử chẵn"
-- "Thiết kế database schema cho hệ thống quản lý thư viện với các yêu cầu..."
-- "Cho đoạn code sau có bug, hãy tìm và sửa lỗi: ..."
-- "Xây dựng API endpoint để xử lý yêu cầu X với các validation..."
-- "Tính toán độ phức tạp của thuật toán sau và đề xuất cách tối ưu..."
-
-❌ CÂU HỎI LÝ THUYẾT (KHÔNG TẠO):
-- "React là gì?"
-- "Giải thích khái niệm useState?"
-- "Liệt kê các lifecycle methods?"
-- "Mô tả cách hoạt động của X?"
-- "So sánh A và B?" (nếu không có bài tập kèm theo)`;
+  "hints": ["Gợi ý 1", "Gợi ý 2"],
+  "tags": ["practice", "${difficulty.toLowerCase()}"]
+}`;
 
     const userPrompt = `
 📚 NỘI DUNG BÀI HỌC:
 ${lessonContent}
 
-🎯 YÊU CẦU TẠO CÂU HỎI VẬN DỤNG:
-- Mức độ: ${difficulty} (${guide.description})
+🎯 YÊU CẦU TẠO CÂU HỎI:
 - Tiêu đề: ${title}
-- Tạo chính xác 3 CÂU HỎI VẬN DỤNG dựa trên nội dung bài học
-- Mỗi câu hỏi PHẢI yêu cầu học viên THỰC HÀNH, GIẢI BÀI TẬP, VIẾT CODE hoặc TÍNH TOÁN
-- KHÔNG tạo câu hỏi lý thuyết như "X là gì?", "Giải thích Y?"
+- Mức độ: ${difficulty}
+- Tạo chính xác 3 câu hỏi
 
-💡 HƯỚNG DẪN CHO MỨC ${difficulty}:
+📊 ĐỘ KHÓ CÂU HỎI - MỨC ${difficulty}:
+${guide.description}
 ${guide.focus}
+${guide.answerLength}
 
-📝 VÍ DỤ CÂU HỎI VẬN DỤNG: ${guide.examples}
+${difficulty === "Dễ" ? `
+⚡ LƯU Ý QUAN TRỌNG CHO MỨC DỄ:
+- Câu hỏi PHẢI NGẮN GỌN, dễ hiểu
+- Người dùng có thể trả lời NGAY trong vài giây
+- Chỉ hỏi 1 điều đơn giản, không hỏi nhiều ý
+- Câu trả lời chỉ cần 1-2 câu hoặc 1 giá trị cụ thể
+- KHÔNG yêu cầu viết code dài, giải thích phức tạp
 
-🔥 QUY TẮC BẮT BUỘC:
-1. Đọc kỹ nội dung bài học và xác định các kỹ năng/kiến thức có thể thực hành
-2. Tạo TÌNH HUỐNG/BÀI TOÁN cụ thể để học viên áp dụng kiến thức
-3. Câu hỏi phải có INPUT rõ ràng (dữ liệu, yêu cầu, ràng buộc)
-4. Câu hỏi phải yêu cầu OUTPUT cụ thể (code, kết quả, giải pháp)
-5. Độ khó phù hợp với mức ${difficulty}
+VÍ DỤ CÂU HỎI MỨC DỄ PHÙ HỢP:
+- "X + Y = ?" (cho số cụ thể)
+- "Từ 'abc' nghĩa là gì?"
+- "Lệnh này in ra kết quả gì?"
+- "Đúng hay sai: [phát biểu đơn giản]?"
+` : ''}
 
-❌ TUYỆT ĐỐI KHÔNG TẠO:
-- Câu hỏi định nghĩa: "X là gì?"
-- Câu hỏi giải thích: "Giải thích cách hoạt động của Y?"
-- Câu hỏi liệt kê: "Liệt kê các đặc điểm của Z?"
-- Câu hỏi so sánh thuần túy: "So sánh A và B?" (không có bài tập)
+${difficulty === "Trung bình" ? `
+📝 LƯU Ý CHO MỨC TRUNG BÌNH:
+- Câu hỏi cần suy nghĩ một chút
+- Yêu cầu áp dụng kiến thức vào bài tập
+- Có thể yêu cầu viết code ngắn hoặc giải thích
+` : ''}
 
-Hãy tạo JSON hợp lệ theo đúng định dạng. Title sẽ là "Luyện tập: ${title}".`;
+${difficulty === "Khó" || difficulty === "Rất Khó" ? `
+🔥 LƯU Ý CHO MỨC ${difficulty}:
+- Câu hỏi phức tạp, cần phân tích sâu
+- Có thể yêu cầu thiết kế, tối ưu, so sánh
+- Câu trả lời cần chi tiết và đầy đủ
+` : ''}
+
+🔥 QUY TẮC:
+1. Câu hỏi PHẢI liên quan đến nội dung bài học ở trên
+2. Độ khó PHẢI phù hợp mức ${difficulty}
+3. Mỗi câu hỏi có dữ liệu/ví dụ cụ thể
+
+Tạo JSON với title "Luyện tập: ${title}".`;
 
     const aiResult = await callGeminiJSON({
       systemPrompt,
