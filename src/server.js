@@ -23,6 +23,7 @@ const reviewRoutes = require("./routes/review.routes");
 const walletRoutes = require("./routes/wallet.routes");
 const announcementRoutes = require("./routes/announcement.routes");
 const certificateRoutes = require("./routes/certificate.routes");
+const shareRoutes = require("./routes/share.routes");
 
 connectDB();
 const app = express();
@@ -58,6 +59,7 @@ app.use("/api/reviews", reviewRoutes);
 app.use("/api/wallet", walletRoutes);
 app.use("/api/announcements", announcementRoutes);
 app.use("/api/certificates", certificateRoutes);
+app.use("/api/share", shareRoutes);
 
 const PORT = process.env.PORT || 5000;
 
