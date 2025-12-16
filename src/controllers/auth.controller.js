@@ -276,3 +276,57 @@ exports.logout = async (req, res) => {
   });
   return res.json({ message: "Đã đăng xuất" });
 };
+
+// PUT /api/auth/profile - Cập nhật thông tin cá nhân
+exports.updateProfile = async (req, res) => {
+  try {
+    const userId = req.user?.id || req.user?._id;
+    if (!userId) {
+      return res.status(401).json({ message: "Chưa đăng nhập" });
+    }
+
+    const { name, phone, dob, bio } = req.body;
+
+    // Validate
+    if (name && name.trim().length < 2) {
+      return res.status(400).json({ message: "Tên phải có ít nhất 2 ký tự" });
+    }
+
+    if (phone && !/^[0-9]{10,11}$/.test(phone.replace(/\s/g, ''))) {
+      return res.status(400).json({ message: "Số điện thoại không hợp lệ" });
+    }
+
+    const updateData = {};
+    if (name) updateData.name = name.trim();
+    if (phone !== undefined) updateData.phone = phone ? phone.trim() : '';
+    if (dob !== undefined) updateData.dob = dob ? new Date(dob) : null;
+    if (bio !== undefined) updateData.bio = bio ? bio.trim() : '';
+
+    const user = await User.findByIdAndUpdate(
+      userId,
+      { $set: updateData },
+      { new: true, runValidators: true }
+    ).select("-password");
+
+    if (!user) {
+      return res.status(404).json({ message: "Không tìm thấy người dùng" });
+    }
+
+    return res.json({
+      message: "Cập nhật thông tin thành công",
+      user: {
+        _id: user._id,
+        name: user.name,
+        email: user.email,
+        role: user.role,
+        phone: user.phone,
+        dob: user.dob,
+        bio: user.bio,
+        avatar: user.avatar || null,
+      },
+    });
+  } catch (err) {
+    console.error("updateProfile error:", err);
+    return res.status(500).json({ message: "Lỗi server" });
+  }
+};
