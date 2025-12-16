@@ -81,6 +81,80 @@ async function sendCreditNotification({ to, userName, coins, reason, newBalance 
   }
 }
 
+/**
+ * Gửi OTP xác thực email
+ */
+async function sendOtpEmail({ to, otp, userName }) {
+  const mailOptions = {
+    from: `"SmartLearn" <${process.env.EMAIL_USER}>`,
+    to,
+    subject: `🔐 Mã xác thực của bạn: ${otp}`,
+    html: `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="utf-8">
+        <style>
+          body { font-family: 'Segoe UI', Arial, sans-serif; background: #f4f7fa; margin: 0; padding: 20px; }
+          .container { max-width: 500px; margin: 0 auto; background: #fff; border-radius: 16px; overflow: hidden; box-shadow: 0 4px 20px rgba(0,0,0,0.1); }
+          .header { background: linear-gradient(135deg, #3b82f6, #2563eb); padding: 30px; text-align: center; }
+          .header h1 { color: #fff; margin: 0; font-size: 24px; }
+          .content { padding: 30px; text-align: center; }
+          .otp-box { background: linear-gradient(135deg, #f0f9ff, #dbeafe); padding: 24px; border-radius: 12px; margin: 20px 0; }
+          .otp-code { font-size: 36px; font-weight: 700; letter-spacing: 8px; color: #1e40af; font-family: monospace; }
+          .expire-text { color: #64748b; font-size: 14px; margin-top: 20px; }
+          .warning { background: #fef3c7; padding: 12px; border-radius: 8px; color: #92400e; font-size: 13px; margin-top: 20px; }
+          .footer { padding: 20px; text-align: center; color: #94a3b8; font-size: 12px; }
+        </style>
+      </head>
+      <body>
+        <div class="container">
+          <div class="header">
+            <h1>Xác thực email</h1>
+          </div>
+          <div class="content">
+            <p>Xin chào <strong>${userName || "bạn"}</strong>,</p>
+            <p>Vui lòng sử dụng mã OTP bên dưới để xác thực email của bạn:</p>
+            
+            <div class="otp-box">
+              <div class="otp-code">${otp}</div>
+            </div>
+            
+            <p class="expire-text">⏱️ Mã này sẽ hết hạn sau <strong>5 phút</strong></p>
+            
+            <div class="warning">
+              ⚠️ Không chia sẻ mã này với bất kỳ ai. Nhân viên của chúng tôi sẽ không bao giờ hỏi mã OTP của bạn.
+            </div>
+          </div>
+          <div class="footer">
+            <p>Nếu bạn không yêu cầu mã này, vui lòng bỏ qua email này.</p>
+            <p>© ${new Date().getFullYear()} SmartLearn - Hệ thống học tập trực tuyến</p>
+          </div>
+        </div>
+      </body>
+      </html>
+    `,
+  };
+
+  try {
+    await transporter.sendMail(mailOptions);
+    console.log(`[Email] OTP sent to ${to}`);
+    return true;
+  } catch (err) {
+    console.error("[Email] Failed to send OTP:", err.message);
+    return false;
+  }
+}
+
+/**
+ * Tạo OTP 6 số ngẫu nhiên
+ */
+function generateOtp() {
+  return Math.floor(100000 + Math.random() * 900000).toString();
+}
+
 module.exports = {
   sendCreditNotification,
+  sendOtpEmail,
+  generateOtp,
 };
