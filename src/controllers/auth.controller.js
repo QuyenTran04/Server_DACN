@@ -3,6 +3,8 @@ const jwt = require("jsonwebtoken");
 const bcrypt = require("bcryptjs");
 const { OAuth2Client } = require("google-auth-library");
 const User = require("../models/User");
+const Otp = require("../models/Otp");
+const emailService = require("../services/email.service");
 
 const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 
@@ -35,7 +37,7 @@ const userToSafe = (u, fallback = {}) => ({
   emailVerified: typeof u.emailVerified === "boolean" ? u.emailVerified : false,
 });
 
-// POST /api/auth/register 
+// POST /api/auth/register - Bước 1: Gửi OTP xác thực email
 exports.register = async (req, res) => {
   try {
     const { name, email, password, role } = req.body;
@@ -50,26 +52,100 @@ exports.register = async (req, res) => {
     const existed = await User.findOne({ email: emailNorm });
 
     if (existed) {
-      // Nếu tài khoản tồn tại do Google trước đó → hướng dẫn đăng nhập bằng Google
       if (existed.provider === "google") {
         return res.status(409).json({
-          message:
-            "Email đã được sử dụng cho đăng nhập Google. Vui lòng dùng Đăng nhập với Google.",
+          message: "Email đã được sử dụng cho đăng nhập Google. Vui lòng dùng Đăng nhập với Google.",
         });
       }
       return res.status(409).json({ message: "Email đã được sử dụng" });
     }
 
-    const hash = await bcrypt.hash(password, 10);
+    // Tạo OTP và lưu vào DB
+    const otp = emailService.generateOtp();
+    const expiresAt = new Date(Date.now() + 5 * 60 * 1000); // 5 phút
 
+    // Xóa OTP cũ nếu có
+    await Otp.deleteMany({ email: emailNorm, type: "register" });
+
+    // Lưu OTP mới cùng thông tin đăng ký tạm
+    await Otp.create({
+      email: emailNorm,
+      otp,
+      type: "register",
+      expiresAt,
+      tempData: { name, password: await bcrypt.hash(password, 10), role: pickRole(role) },
+    });
+
+    // Gửi email OTP
+    await emailService.sendOtpEmail({ to: emailNorm, otp, userName: name });
+
+    return res.status(200).json({
+      message: "Mã OTP đã được gửi đến email của bạn",
+      email: emailNorm,
+      requireOtp: true,
+    });
+  } catch (err) {
+    console.error("Register error:", err);
+    return res.status(500).json({ message: "Lỗi server" });
+  }
+};
+
+// POST /api/auth/verify-otp - Bước 2: Xác thực OTP và tạo tài khoản
+exports.verifyOtp = async (req, res) => {
+  try {
+    const { email, otp } = req.body;
+
+    if (!email || !otp) {
+      return res.status(400).json({ message: "Thiếu email hoặc mã OTP" });
+    }
+
+    const emailNorm = normalizeEmail(email);
+    const otpRecord = await Otp.findOne({ 
+      email: emailNorm, 
+      type: "register",
+      verified: false 
+    });
+
+    if (!otpRecord) {
+      return res.status(400).json({ message: "Không tìm thấy yêu cầu đăng ký. Vui lòng đăng ký lại." });
+    }
+
+    // Kiểm tra hết hạn
+    if (new Date() > otpRecord.expiresAt) {
+      await Otp.deleteOne({ _id: otpRecord._id });
+      return res.status(400).json({ message: "Mã OTP đã hết hạn. Vui lòng yêu cầu mã mới." });
+    }
+
+    // Kiểm tra số lần thử
+    if (otpRecord.attempts >= 5) {
+      await Otp.deleteOne({ _id: otpRecord._id });
+      return res.status(400).json({ message: "Bạn đã nhập sai quá nhiều lần. Vui lòng đăng ký lại." });
+    }
+
+    // Kiểm tra OTP
+    if (otpRecord.otp !== otp) {
+      await Otp.updateOne({ _id: otpRecord._id }, { $inc: { attempts: 1 } });
+      return res.status(400).json({ 
+        message: "Mã OTP không đúng",
+        attemptsLeft: 5 - otpRecord.attempts - 1
+      });
+    }
+
+    // OTP đúng - Tạo tài khoản
+    const { name, password, role } = otpRecord.tempData || {};
+    
     const user = await User.create({
       name,
       email: emailNorm,
-      password: hash,
-      role: pickRole(role),
+      password,
+      role,
       provider: "local",
+      emailVerified: true,
       lastLoginAt: new Date(),
     });
+
+    // Xóa OTP record
+    await Otp.deleteOne({ _id: otpRecord._id });
 
     const token = signAndSetCookie(res, { id: user._id, role: user.role });
 
@@ -82,7 +158,46 @@ exports.register = async (req, res) => {
     if (err.code === 11000) {
       return res.status(409).json({ message: "Email đã được sử dụng" });
     }
-    console.error(err);
+    console.error("Verify OTP error:", err);
+    return res.status(500).json({ message: "Lỗi server" });
+  }
+};
+
+// POST /api/auth/resend-otp - Gửi lại OTP
+exports.resendOtp = async (req, res) => {
+  try {
+    const { email } = req.body;
+
+    if (!email) {
+      return res.status(400).json({ message: "Thiếu email" });
+    }
+
+    const emailNorm = normalizeEmail(email);
+    const otpRecord = await Otp.findOne({ email: emailNorm, type: "register" });
+
+    if (!otpRecord || !otpRecord.tempData) {
+      return res.status(400).json({ message: "Không tìm thấy yêu cầu đăng ký. Vui lòng đăng ký lại." });
+    }
+
+    // Tạo OTP mới
+    const otp = emailService.generateOtp();
+    const expiresAt = new Date(Date.now() + 5 * 60 * 1000);
+
+    await Otp.updateOne(
+      { _id: otpRecord._id },
+      { otp, expiresAt, attempts: 0 }
+    );
+
+    // Gửi email
+    await emailService.sendOtpEmail({ 
+      to: emailNorm, 
+      otp, 
+      userName: otpRecord.tempData.name 
+    });
+
+    return res.json({ message: "Mã OTP mới đã được gửi đến email của bạn" });
+  } catch (err) {
+    console.error("Resend OTP error:", err);
     return res.status(500).json({ message: "Lỗi server" });
   }
 };
@@ -275,4 +390,58 @@ exports.logout = async (req, res) => {
     secure: process.env.COOKIE_SECURE === "true",
   });
   return res.json({ message: "Đã đăng xuất" });
+};
+
+// PUT /api/auth/profile - Cập nhật thông tin cá nhân
+exports.updateProfile = async (req, res) => {
+  try {
+    const userId = req.user?.id || req.user?._id;
+    if (!userId) {
+      return res.status(401).json({ message: "Chưa đăng nhập" });
+    }
+
+    const { name, phone, dob, bio } = req.body;
+
+    // Validate
+    if (name && name.trim().length < 2) {
+      return res.status(400).json({ message: "Tên phải có ít nhất 2 ký tự" });
+    }
+
+    if (phone && !/^[0-9]{10,11}$/.test(phone.replace(/\s/g, ''))) {
+      return res.status(400).json({ message: "Số điện thoại không hợp lệ" });
+    }
+
+    const updateData = {};
+    if (name) updateData.name = name.trim();
+    if (phone !== undefined) updateData.phone = phone ? phone.trim() : '';
+    if (dob !== undefined) updateData.dob = dob ? new Date(dob) : null;
+    if (bio !== undefined) updateData.bio = bio ? bio.trim() : '';
+
+    const user = await User.findByIdAndUpdate(
+      userId,
+      { $set: updateData },
+      { new: true, runValidators: true }
+    ).select("-password");
+
+    if (!user) {
+      return res.status(404).json({ message: "Không tìm thấy người dùng" });
+    }
+
+    return res.json({
+      message: "Cập nhật thông tin thành công",
+      user: {
+        _id: user._id,
+        name: user.name,
+        email: user.email,
+        role: user.role,
+        phone: user.phone,
+        dob: user.dob,
+        bio: user.bio,
+        avatar: user.avatar || null,
+      },
+    });
+  } catch (err) {
+    console.error("updateProfile error:", err);
+    return res.status(500).json({ message: "Lỗi server" });
+  }
 };

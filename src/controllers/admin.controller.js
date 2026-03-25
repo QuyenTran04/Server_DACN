@@ -890,6 +890,7 @@ exports.updateSettings = async (req, res) => {
    12) QUẢN LÝ VÍ - MANUAL CREDIT
 ========================= */
 const walletService = require("../services/wallet.service");
+const emailService = require("../services/email.service");
 const Wallet = require("../models/Wallet");
 const WalletTransaction = require("../models/WalletTransaction");
 
@@ -1038,6 +1039,17 @@ exports.creditUserWallet = async (req, res) => {
 
     // Lấy thông tin ví sau khi credit
     const walletData = await walletService.getWalletWithTransactions(userId, 5);
+
+    // Gửi email thông báo
+    if (user.email) {
+      emailService.sendCreditNotification({
+        to: user.email,
+        userName: user.name || "Người dùng",
+        coins: Number(coins),
+        reason: reason || "Admin cộng xu",
+        newBalance: walletData.wallet?.balance || 0,
+      }).catch(err => console.error("[creditUserWallet] Email error:", err));
+    }
 
     res.json({
       message: `Đã cộng ${coins} xu vào tài khoản ${user.name || user.email}`,
